@@ -290,6 +290,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     sfxStep();
     startMusic(room.ambiance);
+    moveNpcs(get, set);
     updateVisibility(get);
     autoHealIfLow(get, set);
     updateContext(get, set);
@@ -1141,6 +1142,72 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
 }));
+
+function moveNpcs(
+  get: () => GameStore,
+  set: (partial: Partial<GameStore>) => void,
+) {
+  const state = get();
+  const room = state.rooms[state.currentRoomId];
+  if (!room) return;
+
+  const playerPos = state.player.position;
+
+  for (const npc of room.npcs) {
+    const tile = room.tiles[npc.position.y]?.[npc.position.x];
+    if (!tile?.visible) continue;
+
+    if (npc.type === "hostile") {
+      const dx = playerPos.x - npc.position.x;
+      const dy = playerPos.y - npc.position.y;
+      const d = Math.abs(dx) + Math.abs(dy);
+
+      if (d <= 1) continue;
+      if (d > 8) continue;
+
+      let nx = npc.position.x;
+      let ny = npc.position.y;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        nx += dx > 0 ? 1 : -1;
+      } else {
+        ny += dy > 0 ? 1 : -1;
+      }
+
+      if (nx >= 0 && ny >= 0 && nx < room.width && ny < room.height) {
+        const targetTile = room.tiles[ny][nx];
+        if (targetTile.walkable && targetTile.type === "floor") {
+          const blocked = room.npcs.some(
+            (other) => other.id !== npc.id && other.position.x === nx && other.position.y === ny,
+          );
+          if (!blocked && !(nx === playerPos.x && ny === playerPos.y)) {
+            npc.position = { x: nx, y: ny };
+          }
+        }
+      }
+    } else if (npc.type === "friendly" || npc.type === "merchant") {
+      if (Math.random() > 0.2) continue;
+
+      const dirs = [
+        { x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 1, y: 0 },
+      ];
+      const dir = dirs[Math.floor(Math.random() * dirs.length)];
+      const nx = npc.position.x + dir.x;
+      const ny = npc.position.y + dir.y;
+
+      if (nx >= 0 && ny >= 0 && nx < room.width && ny < room.height) {
+        const targetTile = room.tiles[ny][nx];
+        if (targetTile.walkable && targetTile.type === "floor") {
+          const blocked = room.npcs.some(
+            (other) => other.id !== npc.id && other.position.x === nx && other.position.y === ny,
+          );
+          if (!blocked && !(nx === playerPos.x && ny === playerPos.y)) {
+            npc.position = { x: nx, y: ny };
+          }
+        }
+      }
+    }
+  }
+}
 
 function findBestNearbyItem(
   room: Room,
