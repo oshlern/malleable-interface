@@ -8,6 +8,8 @@ export function KeyboardHandler() {
   const togglePanel = useGameStore((s) => s.togglePanel);
   const setCommandOpen = useGameStore((s) => s.setCommandOpen);
   const commandOpen = useGameStore((s) => s.commandOpen);
+  const tradeOpen = useGameStore((s) => s.tradeOpen);
+  const closeTrade = useGameStore((s) => s.closeTrade);
   const menuOpen = useGameStore((s) => s.menuOpen);
   const setMenuOpen = useGameStore((s) => s.setMenuOpen);
   const combatTarget = useGameStore((s) => s.combatTarget);
@@ -26,9 +28,13 @@ export function KeyboardHandler() {
         return;
       }
 
+      if (useGameStore.getState().victory) return;
+
       if (e.key === "Escape") {
         e.preventDefault();
-        if (commandOpen) {
+        if (tradeOpen) {
+          closeTrade();
+        } else if (commandOpen) {
           setCommandOpen(false);
         } else {
           setMenuOpen(!menuOpen);
@@ -36,7 +42,7 @@ export function KeyboardHandler() {
         return;
       }
 
-      if (commandOpen || menuOpen) return;
+      if (tradeOpen || commandOpen || menuOpen) return;
 
       switch (e.key.toLowerCase()) {
         case "w":
@@ -126,6 +132,8 @@ export function KeyboardHandler() {
     togglePanel,
     setCommandOpen,
     commandOpen,
+    tradeOpen,
+    closeTrade,
     menuOpen,
     setMenuOpen,
     combatTarget,

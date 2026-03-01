@@ -120,6 +120,16 @@ export interface GameMessage {
   timestamp: number;
 }
 
+export interface StatusEffect {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  turnsRemaining: number;
+  damagePerTurn?: number;
+  healPerTurn?: number;
+}
+
 export type HudPanel = "inventory" | "stats" | "quests" | "map" | "log" | "plan";
 
 export interface PlanStep {

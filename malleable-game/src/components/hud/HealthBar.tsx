@@ -7,6 +7,7 @@ export function HealthBar() {
   const stats = useGameStore((s) => s.player.stats);
   const seed = useGameStore((s) => s.seed);
   const setMenuOpen = useGameStore((s) => s.setMenuOpen);
+  const statusEffects = useGameStore((s) => s.statusEffects);
   const healthPct = (stats.health / stats.maxHealth) * 100;
   const xpPct = (stats.xp / stats.xpToNext) * 100;
 
@@ -29,6 +30,21 @@ export function HealthBar() {
           </span>
         </div>
       </div>
+
+      {statusEffects.length > 0 && (
+        <div className="flex items-center gap-1">
+          {statusEffects.map((effect) => (
+            <span
+              key={effect.id}
+              className="px-1.5 py-0.5 rounded-full text-[9px] font-ui"
+              style={{ backgroundColor: effect.color + "20", color: effect.color }}
+              title={`${effect.name} (${effect.turnsRemaining} turns)`}
+            >
+              {effect.icon} {effect.turnsRemaining}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center gap-3 text-[10px] font-ui text-white/50">
         <span className="flex items-center gap-1">

@@ -16,10 +16,12 @@ import type {
   PlanStep,
   RunStats,
   RunEvent,
+  StatusEffect,
 } from "../engine/types";
 import { generatePlan } from "../engine/planner";
 import { createRooms } from "../content/rooms";
 import { QUESTS } from "../content/quests";
+import { ITEMS } from "../content/items";
 import { setSeed, getSeed } from "../engine/rng";
 import {
   sfxStep,
@@ -62,8 +64,11 @@ export interface GameStore {
   commandOpen: boolean;
   menuOpen: boolean;
   gameOver: boolean;
+  victory: boolean;
   turnCount: number;
   combatTarget: NPCDef | null;
+  tradeOpen: boolean;
+  tradeNpc: NPCDef | null;
   autopilot: boolean;
   seed: number;
   smartPlanner: boolean;
@@ -72,6 +77,7 @@ export interface GameStore {
   recentMoves: string[];
   runStats: RunStats;
   runEvents: RunEvent[];
+  statusEffects: StatusEffect[];
 
   move: (dir: Direction) => void;
   interact: () => void;
@@ -82,6 +88,10 @@ export interface GameStore {
   attackTarget: () => void;
   talkToNpc: () => void;
   acceptQuest: (questId: string) => void;
+  openTrade: (npc: NPCDef) => void;
+  closeTrade: () => void;
+  buyItem: (itemId: string) => void;
+  sellItem: (itemId: string) => void;
   togglePanel: (panel: HudPanel) => void;
   setCommandOpen: (open: boolean) => void;
   executePredicted: () => void;
@@ -93,6 +103,7 @@ export interface GameStore {
   setMenuOpen: (open: boolean) => void;
   saveGame: () => void;
   loadGame: () => void;
+  addStatusEffect: (effect: StatusEffect) => void;
   deleteSave: () => void;
   toggleSmartPlanner: () => void;
   requestReplan: (stuckReason?: string) => void;
@@ -171,8 +182,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   commandOpen: false,
   menuOpen: false,
   gameOver: false,
+  victory: false,
   turnCount: 0,
   combatTarget: null,
+  tradeOpen: false,
+  tradeNpc: null,
   autopilot: false,
   seed: defaultSeed,
   smartPlanner: false,
@@ -181,10 +195,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   recentMoves: [],
   runStats: { ...emptyRunStats },
   runEvents: [],
+  statusEffects: [],
 
   move(dir: Direction) {
     const state = get();
-    if (state.gameOver) return;
+    if (state.gameOver || state.victory) return;
 
     const { position } = state.player;
     const room = state.rooms[state.currentRoomId];
@@ -252,6 +267,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
         changeAmbiance(targetRoom.ambiance);
         get().addMessage(`Entered ${targetRoom.name}.`, "info");
 
+        if (exit.targetRoomId === "chapel_ruins") {
+          get().addStatusEffect({ id: "blessed", name: "Blessed", icon: "✨", color: "#a78bfa", turnsRemaining: 20, healPerTurn: 1 });
+          get().addMessage("A holy aura washes over you.", "info");
+        }
+
         if (exit.targetRoomId === "crypt" && state.quests.quest_crypt?.status === "active") {
           const quests = { ...state.quests };
           quests.quest_crypt.progress = 1;
@@ -292,8 +312,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
     startMusic(room.ambiance);
     moveNpcs(get, set);
     updateVisibility(get);
+
+    const adjOffsets = [{ x: -1, y: 0 }, { x: 1, y: 0 }, { x: 0, y: -1 }, { x: 0, y: 1 }];
+    const nearLava = adjOffsets.some((off) => {
+      const ax = nx + off.x;
+      const ay = ny + off.y;
+      return ax >= 0 && ay >= 0 && ax < room.width && ay < room.height && room.tiles[ay][ax].type === "lava";
+    });
+    if (nearLava && Math.random() < 0.15) {
+      get().addStatusEffect({ id: "burning", name: "Burning", icon: "🔥", color: "#f97316", turnsRemaining: 3, damagePerTurn: 3 });
+      get().addMessage("The heat singes you!", "danger");
+    }
+
     autoHealIfLow(get, set);
     updateContext(get, set);
+    tickStatusEffects(get, set);
     maybeReplan(get, newTurn);
   },
 
@@ -579,6 +612,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
         runStats: atkRunStats,
         runEvents: atkRunEvents,
       });
+
+      if (target.name.includes("Spider") && Math.random() < 0.3) {
+        get().addStatusEffect({ id: "poison", name: "Poisoned", icon: "☠", color: "#65a30d", turnsRemaining: 5, damagePerTurn: 2 });
+        get().addMessage("You've been poisoned!", "danger");
+      }
+
       autoHealIfLow(get, set);
     }
     updateContext(get, set);
@@ -614,6 +653,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       sfxQuestComplete();
       get().addMessage("Quest complete: No One Left Behind! Elena is safe.", "quest");
       set({ quests });
+    }
+
+    if (nearbyNpc.type === "merchant") {
+      set({ tradeOpen: true, tradeNpc: nearbyNpc });
+    }
+
+    if (nearbyNpc.id === "npc_ghost" && state.player.inventory.some((s) => s.item.id === "crypt_key")) {
+      get().addMessage("The piano begins to play... The dead find peace at last.", "quest");
+      set({
+        victory: true,
+        runEvents: [...get().runEvents, { turn: state.turnCount, text: "The Nocturne plays — victory", type: "quest" as const }],
+      });
+      updateContext(get, set);
+      return;
     }
 
     if (nearbyNpc.questId) {
@@ -663,6 +716,52 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ activePanels: [...get().activePanels, "quests"] });
     }
     updateContext(get, set);
+  },
+
+  openTrade(npc: NPCDef) {
+    set({ tradeOpen: true, tradeNpc: npc });
+  },
+
+  closeTrade() {
+    set({ tradeOpen: false, tradeNpc: null });
+  },
+
+  buyItem(itemId: string) {
+    const state = get();
+    const itemDef = ITEMS[itemId];
+    if (!itemDef) return;
+    const price = itemDef.value;
+    if (state.player.stats.gold < price) {
+      get().addMessage("Not enough gold.", "system");
+      return;
+    }
+    const stats = { ...state.player.stats, gold: state.player.stats.gold - price };
+    const inventory = [...state.player.inventory];
+    const existingSlot = inventory.find((s) => s.item.id === itemId && itemDef.stackable);
+    if (existingSlot) {
+      existingSlot.quantity += 1;
+    } else {
+      inventory.push({ item: { ...itemDef }, quantity: 1, equipped: false });
+    }
+    set({ player: { ...state.player, stats, inventory } });
+    get().addMessage(`Bought ${itemDef.name} for ${price}g.`, "loot");
+  },
+
+  sellItem(itemId: string) {
+    const state = get();
+    const inventory = [...state.player.inventory];
+    const slotIdx = inventory.findIndex((s) => s.item.id === itemId);
+    if (slotIdx === -1) return;
+    const slot = inventory[slotIdx];
+    const sellPrice = Math.floor(slot.item.value / 2);
+    const stats = { ...state.player.stats, gold: state.player.stats.gold + sellPrice };
+    if (slot.quantity > 1) {
+      inventory[slotIdx] = { ...slot, quantity: slot.quantity - 1 };
+    } else {
+      inventory.splice(slotIdx, 1);
+    }
+    set({ player: { ...state.player, stats, inventory } });
+    get().addMessage(`Sold ${slot.item.name} for ${sellPrice}g.`, "loot");
   },
 
   togglePanel(panel: HudPanel) {
@@ -804,8 +903,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       activePanels: ["log"],
       commandOpen: false,
       gameOver: false,
+      victory: false,
       turnCount: 0,
       combatTarget: null,
+      tradeOpen: false,
+      tradeNpc: null,
       autopilot: false,
       seed: s,
       smartPlanner: false,
@@ -815,6 +917,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       recentMoves: [],
       runStats: { ...emptyRunStats },
       runEvents: [],
+      statusEffects: [],
     });
   },
 
@@ -854,6 +957,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     updateContext(get, set);
   },
 
+  addStatusEffect(effect: StatusEffect) {
+    const effects = [...get().statusEffects];
+    const existing = effects.findIndex((e) => e.id === effect.id);
+    if (existing !== -1) {
+      effects[existing] = { ...effect, turnsRemaining: Math.max(effects[existing].turnsRemaining, effect.turnsRemaining) };
+    } else {
+      effects.push(effect);
+    }
+    set({ statusEffects: effects });
+  },
+
   deleteSave() {
     deleteSaveFromStorage();
     get().addMessage("Save deleted.", "system");
@@ -861,7 +975,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   getAutopilotAction() {
     const state = get();
-    if (state.gameOver) return null;
+    if (state.gameOver || state.victory) return null;
 
     if (state.smartPlanner && state.smartPlan && !state.plannerLoading) {
       const smartAction = get().getSmartAction();
@@ -1206,6 +1320,59 @@ function moveNpcs(
         }
       }
     }
+  }
+}
+
+function tickStatusEffects(
+  get: () => GameStore,
+  set: (partial: Partial<GameStore>) => void,
+) {
+  const state = get();
+  const effects = [...state.statusEffects];
+  if (effects.length === 0) return;
+
+  const stats = { ...state.player.stats };
+  const messages: { text: string; type: GameMessage["type"] }[] = [];
+
+  for (const effect of effects) {
+    if (effect.damagePerTurn) {
+      stats.health -= effect.damagePerTurn;
+      messages.push({ text: `${effect.icon} ${effect.name} deals ${effect.damagePerTurn} damage!`, type: "danger" });
+    }
+    if (effect.healPerTurn) {
+      stats.health = Math.min(stats.maxHealth, stats.health + effect.healPerTurn);
+      messages.push({ text: `${effect.icon} ${effect.name} heals ${effect.healPerTurn} HP.`, type: "info" });
+    }
+    effect.turnsRemaining -= 1;
+  }
+
+  const expired = effects.filter((e) => e.turnsRemaining <= 0);
+  const remaining = effects.filter((e) => e.turnsRemaining > 0);
+
+  for (const e of expired) {
+    messages.push({ text: `${e.icon} ${e.name} wore off.`, type: "info" });
+  }
+
+  set({
+    player: { ...state.player, stats },
+    statusEffects: remaining,
+  });
+
+  for (const m of messages) {
+    get().addMessage(m.text, m.type);
+  }
+
+  if (stats.health <= 0) {
+    stats.health = 0;
+    set({
+      player: { ...get().player, stats: { ...get().player.stats, health: 0 } },
+      gameOver: true,
+      combatTarget: null,
+      runEvents: [...get().runEvents, { turn: state.turnCount, text: "Killed by status effect", type: "death" as const }],
+    });
+    sfxDeath();
+    triggerShake(12, 30);
+    get().addMessage("You have been defeated...", "danger");
   }
 }
 
