@@ -51,6 +51,7 @@ export interface GameStore {
   gameOver: boolean;
   turnCount: number;
   combatTarget: NPCDef | null;
+  autopilot: boolean;
 
   move: (dir: Direction) => void;
   interact: () => void;
@@ -66,6 +67,8 @@ export interface GameStore {
   executePredicted: () => void;
   addMessage: (text: string, type: GameMessage["type"]) => void;
   processCommand: (command: string) => void;
+  toggleAutopilot: () => void;
+  getAutopilotAction: () => (() => void) | null;
 }
 
 let msgId = 0;
@@ -117,6 +120,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   gameOver: false,
   turnCount: 0,
   combatTarget: null,
+  autopilot: false,
 
   move(dir: Direction) {
     const state = get();
@@ -539,13 +543,186 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (!s.activePanels.includes("stats")) {
         set({ activePanels: [...s.activePanels, "stats"] });
       }
+    } else if (cmd === "autopilot") {
+      s.toggleAutopilot();
     } else {
       s.addMessage(`Unknown command: "${command}"`, "system");
     }
 
     set({ commandOpen: false });
   },
+
+  toggleAutopilot() {
+    const current = get().autopilot;
+    set({ autopilot: !current });
+    get().addMessage(
+      current ? "Autopilot disengaged." : "Autopilot engaged. Hold Tab to watch.",
+      "system",
+    );
+  },
+
+  getAutopilotAction() {
+    const state = get();
+    if (state.gameOver) return null;
+
+    const room = state.rooms[state.currentRoomId];
+    if (!room) return null;
+    const { position, stats, inventory } = state.player;
+
+    // Priority 1: If in combat, attack
+    if (state.combatTarget) {
+      return () => get().attackTarget();
+    }
+
+    // Priority 2: Heal if low health and have a potion
+    if (stats.health < stats.maxHealth * 0.4) {
+      const potion = inventory.find(
+        (s) => (s.item.type === "potion" || s.item.type === "food") && s.quantity > 0,
+      );
+      if (potion) {
+        return () => get().useItem(potion.item.id);
+      }
+    }
+
+    // Priority 3: Pick up item on current tile
+    const itemHere = room.items.find(
+      (i) => i.position.x === position.x && i.position.y === position.y,
+    );
+    if (itemHere) {
+      return () => get().pickUpItem();
+    }
+
+    // Priority 4: Accept available quest from nearby NPC
+    const nearbyFriendly = room.npcs.find(
+      (n) => dist(position, n.position) <= 1 && n.type !== "hostile",
+    );
+    if (nearbyFriendly?.questId) {
+      const quest = state.quests[nearbyFriendly.questId];
+      if (quest?.status === "available") {
+        return () => {
+          get().talkToNpc();
+          get().acceptQuest(quest.id);
+        };
+      }
+    }
+
+    // Priority 5: Talk to nearby friendly NPC (only occasionally)
+    if (nearbyFriendly && state.turnCount % 8 === 0) {
+      return () => get().talkToNpc();
+    }
+
+    // Priority 6: Move toward a goal
+    const moveDir = chooseDirection(state, room, position);
+    if (moveDir) {
+      return () => get().move(moveDir);
+    }
+
+    // Fallback: random walkable direction
+    const dirs: Direction[] = ["up", "down", "left", "right"];
+    const shuffled = dirs.sort(() => Math.random() - 0.5);
+    for (const dir of shuffled) {
+      const delta: Record<Direction, Position> = {
+        up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
+        left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
+      };
+      const d = delta[dir];
+      const nx = position.x + d.x;
+      const ny = position.y + d.y;
+      if (nx >= 0 && ny >= 0 && nx < room.width && ny < room.height) {
+        const tile = room.tiles[ny][nx];
+        if (tile.walkable) {
+          return () => get().move(dir);
+        }
+      }
+    }
+
+    return null;
+  },
 }));
+
+function chooseDirection(
+  state: GameStore,
+  room: Room,
+  position: Position,
+): Direction | null {
+  // Find the most interesting target to move toward
+  type Target = { pos: Position; priority: number };
+  const targets: Target[] = [];
+
+  // Hostile NPCs nearby — approach to fight
+  for (const npc of room.npcs) {
+    if (npc.type === "hostile") {
+      targets.push({ pos: npc.position, priority: 10 });
+    }
+  }
+
+  // Items on the ground
+  for (const { position: itemPos } of room.items) {
+    targets.push({ pos: itemPos, priority: 7 });
+  }
+
+  // Unexplored exits — prefer going deeper
+  for (const exit of room.exits) {
+    const targetRoom = state.rooms[exit.targetRoomId];
+    if (targetRoom && !targetRoom.discovered) {
+      targets.push({ pos: exit.position, priority: 8 });
+    } else if (targetRoom) {
+      targets.push({ pos: exit.position, priority: 3 });
+    }
+  }
+
+  // Quest-related NPCs
+  for (const npc of room.npcs) {
+    if (npc.type !== "hostile" && npc.questId) {
+      const quest = state.quests[npc.questId];
+      if (quest?.status === "available" || quest?.status === "completed") {
+        targets.push({ pos: npc.position, priority: 9 });
+      }
+    }
+  }
+
+  if (targets.length === 0) return null;
+
+  targets.sort((a, b) => b.priority - a.priority);
+  const best = targets[0];
+  const dx = best.pos.x - position.x;
+  const dy = best.pos.y - position.y;
+
+  // Simple greedy pathfinding: move in the axis with larger distance,
+  // check walkability, fall back to the other axis
+  const candidates: Direction[] = [];
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    if (dx > 0) candidates.push("right", dy > 0 ? "down" : "up");
+    else if (dx < 0) candidates.push("left", dy > 0 ? "down" : "up");
+    else candidates.push(dy > 0 ? "down" : "up");
+  } else {
+    if (dy > 0) candidates.push("down", dx > 0 ? "right" : "left");
+    else if (dy < 0) candidates.push("up", dx > 0 ? "right" : "left");
+    else candidates.push(dx > 0 ? "right" : "left");
+  }
+
+  const delta: Record<Direction, Position> = {
+    up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
+    left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
+  };
+
+  for (const dir of candidates) {
+    const d = delta[dir];
+    const nx = position.x + d.x;
+    const ny = position.y + d.y;
+    if (nx >= 0 && ny >= 0 && nx < room.width && ny < room.height) {
+      const tile = room.tiles[ny][nx];
+      if (tile.walkable) {
+        const blockingNpc = room.npcs.find(
+          (n) => n.position.x === nx && n.position.y === ny && n.blocking && n.type !== "hostile",
+        );
+        if (!blockingNpc) return dir;
+      }
+    }
+  }
+
+  return null;
+}
 
 function updateVisibility(get: () => GameStore) {
   const state = get();
@@ -698,5 +875,19 @@ function updateContext(
   }
 
   actions.sort((a, b) => b.priority - a.priority);
+
+  // In autopilot mode, override prediction with the full AI action
+  if (state.autopilot) {
+    const aiAction = get().getAutopilotAction();
+    if (aiAction) {
+      predicted = {
+        label: "AI",
+        confidence: 1.0,
+        action: aiAction,
+        description: "Autopilot",
+      };
+    }
+  }
+
   set({ contextActions: actions, predictedAction: predicted });
 }

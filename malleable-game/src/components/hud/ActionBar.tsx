@@ -5,6 +5,8 @@ export function ActionBar() {
   const contextActions = useGameStore((s) => s.contextActions);
   const predictedAction = useGameStore((s) => s.predictedAction);
   const combatTarget = useGameStore((s) => s.combatTarget);
+  const autopilot = useGameStore((s) => s.autopilot);
+  const toggleAutopilot = useGameStore((s) => s.toggleAutopilot);
 
   return (
     <div className="flex items-center justify-between px-4 py-2 bg-abyss/90 border-t border-white/5 backdrop-blur-sm">
@@ -49,9 +51,22 @@ export function ActionBar() {
         </div>
       )}
 
-      <div className="flex items-center gap-1.5 text-[9px] font-ui text-white/20">
-        <kbd className="px-1 py-0.5 bg-white/5 rounded text-[8px]">/</kbd>
-        <span>cmd</span>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={toggleAutopilot}
+          className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[9px] font-ui transition-all ${
+            autopilot
+              ? "bg-arcane-500/20 border-arcane-500/40 text-arcane-400 animate-glow"
+              : "bg-white/5 border-white/10 text-white/30 hover:text-white/50 hover:border-white/20"
+          }`}
+        >
+          <kbd className="px-1 py-0.5 bg-white/5 rounded text-[8px] font-game">P</kbd>
+          <span>{autopilot ? "AUTOPILOT ON" : "Autopilot"}</span>
+        </button>
+        <div className="flex items-center gap-1.5 text-[9px] font-ui text-white/20">
+          <kbd className="px-1 py-0.5 bg-white/5 rounded text-[8px]">/</kbd>
+          <span>cmd</span>
+        </div>
       </div>
     </div>
   );

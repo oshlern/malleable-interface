@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useGameStore } from "../../state/store";
 
 export function KeyboardHandler() {
@@ -11,9 +11,14 @@ export function KeyboardHandler() {
   const commandOpen = useGameStore((s) => s.commandOpen);
   const combatTarget = useGameStore((s) => s.combatTarget);
   const contextActions = useGameStore((s) => s.contextActions);
+  const toggleAutopilot = useGameStore((s) => s.toggleAutopilot);
+  const autopilot = useGameStore((s) => s.autopilot);
+
+  const tabHeld = useRef(false);
+  const tabInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
+    function handleKeyDown(e: KeyboardEvent) {
       if (commandOpen) return;
 
       const target = e.target as HTMLElement;
@@ -57,7 +62,22 @@ export function KeyboardHandler() {
           break;
         case "tab":
           e.preventDefault();
-          executePredicted();
+          if (!tabHeld.current) {
+            tabHeld.current = true;
+            executePredicted();
+
+            if (autopilot) {
+              tabInterval.current = setInterval(() => {
+                const store = useGameStore.getState();
+                if (store.gameOver) {
+                  if (tabInterval.current) clearInterval(tabInterval.current);
+                  return;
+                }
+                const action = store.getAutopilotAction();
+                if (action) action();
+              }, 150);
+            }
+          }
           break;
         case "i":
           e.preventDefault();
@@ -75,6 +95,10 @@ export function KeyboardHandler() {
           e.preventDefault();
           togglePanel("map");
           break;
+        case "p":
+          e.preventDefault();
+          toggleAutopilot();
+          break;
         case "/":
           e.preventDefault();
           setCommandOpen(true);
@@ -86,8 +110,23 @@ export function KeyboardHandler() {
       }
     }
 
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
+    function handleKeyUp(e: KeyboardEvent) {
+      if (e.key === "Tab") {
+        tabHeld.current = false;
+        if (tabInterval.current) {
+          clearInterval(tabInterval.current);
+          tabInterval.current = null;
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      if (tabInterval.current) clearInterval(tabInterval.current);
+    };
   }, [
     move,
     interact,
@@ -98,6 +137,8 @@ export function KeyboardHandler() {
     commandOpen,
     combatTarget,
     contextActions,
+    toggleAutopilot,
+    autopilot,
   ]);
 
   return null;

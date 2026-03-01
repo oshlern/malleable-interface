@@ -14,6 +14,7 @@ const SUGGESTIONS = [
   "hide map",
   "look",
   "help",
+  "autopilot",
 ];
 
 export function CommandBar() {
