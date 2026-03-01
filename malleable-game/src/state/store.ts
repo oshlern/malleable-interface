@@ -169,8 +169,55 @@ const MAX_RECENT = 6;
 let lastTalkedNpcId: string | null = null;
 let lastEnteredFromRoomId: string | null = null;
 let turnEnteredRoom = 0;
-const ENTRY_COOLDOWN_TURNS = 4;
+const ENTRY_COOLDOWN_TURNS = 8;
 let lastTalkedTurn = -Infinity;
+
+// Room-level exploration memory
+const roomVisitCount = new Map<string, number>();
+const roomLastVisitTurn = new Map<string, number>();
+const roomCleared = new Set<string>();
+const recentRoomPath: string[] = [];
+const MAX_ROOM_PATH = 8;
+
+function recordRoomVisit(roomId: string, turn: number) {
+  roomVisitCount.set(roomId, (roomVisitCount.get(roomId) ?? 0) + 1);
+  roomLastVisitTurn.set(roomId, turn);
+  recentRoomPath.push(roomId);
+  if (recentRoomPath.length > MAX_ROOM_PATH) recentRoomPath.shift();
+}
+
+function isRoomCleared(roomId: string, state: GameStore): boolean {
+  if (roomCleared.has(roomId)) return true;
+  const room = state.rooms[roomId];
+  if (!room || !room.discovered) return false;
+
+  const hasHostiles = room.npcs.some((n) => n.type === "hostile");
+  const hasItems = room.items.length > 0;
+  const hasAvailableQuest = room.npcs.some((n) => {
+    if (!n.questId) return false;
+    const q = state.quests[n.questId];
+    return q && (q.status === "available" || q.status === "completed");
+  });
+
+  if (!hasHostiles && !hasItems && !hasAvailableQuest) {
+    roomCleared.add(roomId);
+    return true;
+  }
+  return false;
+}
+
+function isRoomLooping(): boolean {
+  if (recentRoomPath.length < 4) return false;
+  const last4 = recentRoomPath.slice(-4);
+  return last4[0] === last4[2] && last4[1] === last4[3] && last4[0] !== last4[1];
+}
+
+function resetRoomMemory() {
+  roomVisitCount.clear();
+  roomLastVisitTurn.clear();
+  roomCleared.clear();
+  recentRoomPath.length = 0;
+}
 
 export const useGameStore = create<GameStore>((set, get) => ({
   player: {
@@ -285,6 +332,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         lastEnteredFromRoomId = state.currentRoomId;
         turnEnteredRoom = state.turnCount;
         recentPositions.length = 0;
+        recordRoomVisit(exit.targetRoomId, state.turnCount);
         set({
           currentRoomId: exit.targetRoomId,
           player: { ...state.player, position: entryPos, facing: dir },
@@ -923,6 +971,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     recentPositions.length = 0;
     lastEnteredFromRoomId = null;
     turnEnteredRoom = 0;
+    resetRoomMemory();
     set({
       player: {
         position: { x: 8, y: 5 },
@@ -1791,6 +1840,12 @@ function detectStuck(state: GameStore): string | null {
     return `Movement loop detected: the bot is circling between ${uniqueTiles.size} tiles. It may be stuck trying to reach an inaccessible target.`;
   }
 
+  // Check for room-level oscillation
+  if (isRoomLooping()) {
+    const last4 = recentRoomPath.slice(-4);
+    return `Room oscillation detected: the bot keeps going back and forth between rooms ${last4[0]} and ${last4[1]}. It needs to pick a different destination or explore a new exit.`;
+  }
+
   // Check if current plan step has stalled (>30 turns on the same step)
   const plan = state.smartPlan;
   if (plan) {
@@ -1907,15 +1962,28 @@ function chooseDirection(
     targets.push({ pos: itemPos, priority: 7 });
   }
 
-  // Unexplored exits — prefer going deeper
+  // Exits — score by exploration value, avoid recently entered and cleared rooms
   const recentlyEnteredRoom = lastEnteredFromRoomId && (state.turnCount - turnEnteredRoom) < ENTRY_COOLDOWN_TURNS;
+  const looping = isRoomLooping();
   for (const exit of room.exits) {
     if (recentlyEnteredRoom && exit.targetRoomId === lastEnteredFromRoomId) continue;
+
+    // If we're looping between rooms, strongly avoid the rooms in the loop
+    if (looping && recentRoomPath.slice(-3).includes(exit.targetRoomId)) continue;
+
     const targetRoom = state.rooms[exit.targetRoomId];
-    if (targetRoom && !targetRoom.discovered) {
+    if (!targetRoom) continue;
+
+    if (!targetRoom.discovered) {
       targets.push({ pos: exit.position, priority: 8 });
-    } else if (targetRoom) {
-      targets.push({ pos: exit.position, priority: 3 });
+    } else if (!isRoomCleared(exit.targetRoomId, state)) {
+      const visits = roomVisitCount.get(exit.targetRoomId) ?? 0;
+      const staleness = Math.max(1, 6 - visits);
+      targets.push({ pos: exit.position, priority: staleness });
+    } else {
+      // Cleared rooms are only worth traversing, very low priority
+      const visits = roomVisitCount.get(exit.targetRoomId) ?? 0;
+      targets.push({ pos: exit.position, priority: Math.max(1, 2 - visits) });
     }
   }
 
