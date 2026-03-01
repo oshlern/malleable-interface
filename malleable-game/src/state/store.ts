@@ -147,6 +147,9 @@ function dist(a: Position, b: Position): number {
 const recentPositions: Position[] = [];
 const MAX_RECENT = 6;
 let lastTalkedNpcId: string | null = null;
+let lastEnteredFromRoomId: string | null = null;
+let turnEnteredRoom = 0;
+const ENTRY_COOLDOWN_TURNS = 4;
 let lastTalkedTurn = -Infinity;
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -257,6 +260,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
           moveRunStats.roomsDiscovered += 1;
           moveRunEvents.push({ turn: state.turnCount, text: `Discovered ${targetRoom.name}`, type: "explore" });
         }
+        lastEnteredFromRoomId = state.currentRoomId;
+        turnEnteredRoom = state.turnCount;
+        recentPositions.length = 0;
         set({
           currentRoomId: exit.targetRoomId,
           player: { ...state.player, position: entryPos, facing: dir },
@@ -880,6 +886,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const s = seed ?? Math.floor(Math.random() * 2147483647);
     msgId = 0;
     recentPositions.length = 0;
+    lastEnteredFromRoomId = null;
+    turnEnteredRoom = 0;
     set({
       player: {
         position: { x: 8, y: 5 },
@@ -1363,7 +1371,12 @@ function moveNpcs(
 
       let nx = npc.position.x;
       let ny = npc.position.y;
-      if (Math.abs(dx) >= Math.abs(dy)) {
+      if (Math.random() < 0.35) {
+        const dirs = [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 1, y: 0 }];
+        const pick = dirs[Math.floor(Math.random() * dirs.length)];
+        nx += pick.x;
+        ny += pick.y;
+      } else if (Math.abs(dx) >= Math.abs(dy)) {
         nx += dx > 0 ? 1 : -1;
       } else {
         ny += dy > 0 ? 1 : -1;
@@ -1708,7 +1721,9 @@ function chooseDirection(
   }
 
   // Unexplored exits — prefer going deeper
+  const recentlyEnteredRoom = lastEnteredFromRoomId && (state.turnCount - turnEnteredRoom) < ENTRY_COOLDOWN_TURNS;
   for (const exit of room.exits) {
+    if (recentlyEnteredRoom && exit.targetRoomId === lastEnteredFromRoomId) continue;
     const targetRoom = state.rooms[exit.targetRoomId];
     if (targetRoom && !targetRoom.discovered) {
       targets.push({ pos: exit.position, priority: 8 });
