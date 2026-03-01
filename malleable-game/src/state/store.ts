@@ -978,6 +978,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     if (state.gameOver || state.victory) return null;
 
+    if (state.tradeOpen) {
+      return () => autoTrade(get, set);
+    }
+
     if (state.smartPlanner && state.smartPlan && !state.plannerLoading) {
       const smartAction = get().getSmartAction();
       if (smartAction) return smartAction;
@@ -1257,6 +1261,83 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
 }));
+
+const MERCHANT_STOCK = [
+  "health_potion",
+  "greater_health_potion",
+  "bread",
+  "iron_sword",
+  "leather_vest",
+  "torch",
+  "scroll_fireball",
+];
+
+function autoTrade(
+  get: () => GameStore,
+  set: (partial: Partial<GameStore>) => void,
+) {
+  const state = get();
+  const { stats, inventory } = state.player;
+
+  const sellableTypes = new Set(["treasure", "food"]);
+  const junk = inventory.find(
+    (s) =>
+      !s.equipped &&
+      (sellableTypes.has(s.item.type) ||
+        (s.item.type === "key" && s.item.id === "torch" && s.quantity > 1)),
+  );
+  if (junk) {
+    get().sellItem(junk.item.id);
+    return;
+  }
+
+  const hasPotion = inventory.some(
+    (s) => s.item.type === "potion" && s.quantity > 0,
+  );
+  const potionCount = inventory
+    .filter((s) => s.item.type === "potion")
+    .reduce((sum, s) => sum + s.quantity, 0);
+
+  if (potionCount < 3 && stats.gold >= 25) {
+    const potionId =
+      stats.gold >= 60 ? "greater_health_potion" : "health_potion";
+    get().buyItem(potionId);
+    return;
+  }
+
+  const equippedWeapon = inventory.find(
+    (s) => s.item.type === "weapon" && s.equipped,
+  );
+  const equippedArmor = inventory.find(
+    (s) => s.item.type === "armor" && s.equipped,
+  );
+
+  const weaponAtk = equippedWeapon?.item.effect?.amount ?? 0;
+  const armorDef = equippedArmor?.item.effect?.amount ?? 0;
+
+  for (const stockId of MERCHANT_STOCK) {
+    const item = ITEMS[stockId];
+    if (!item || stats.gold < item.value) continue;
+    if (
+      item.type === "weapon" &&
+      item.effect &&
+      item.effect.amount > weaponAtk
+    ) {
+      get().buyItem(stockId);
+      return;
+    }
+    if (
+      item.type === "armor" &&
+      item.effect &&
+      item.effect.amount > armorDef
+    ) {
+      get().buyItem(stockId);
+      return;
+    }
+  }
+
+  get().closeTrade();
+}
 
 function moveNpcs(
   get: () => GameStore,
