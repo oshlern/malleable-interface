@@ -705,6 +705,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return () => get().pickUpItem();
     }
 
+    // Priority 3.5: Move toward nearby equipment upgrades or useful items
+    const upgradeItem = findBestNearbyItem(room, position, inventory);
+    if (upgradeItem) {
+      const dir = chooseDirectionToward(state, room, position, upgradeItem.position);
+      if (dir) {
+        return () => get().move(dir);
+      }
+    }
+
     // Priority 4: Accept available quest from nearby NPC
     const nearbyFriendly = room.npcs.find(
       (n) => dist(position, n.position) <= 1 && n.type !== "hostile",
@@ -939,6 +948,52 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
 }));
+
+function findBestNearbyItem(
+  room: Room,
+  position: Position,
+  inventory: InventorySlot[],
+): { item: ItemDef; position: Position } | null {
+  const equippedWeapon = inventory.find((s) => s.item.type === "weapon" && s.equipped);
+  const equippedArmor = inventory.find((s) => s.item.type === "armor" && s.equipped);
+
+  let bestItem: { item: ItemDef; position: Position } | null = null;
+  let bestScore = 0;
+
+  for (const groundItem of room.items) {
+    const { item, position: itemPos } = groundItem;
+    const distance = dist(position, itemPos);
+    if (distance > 10) continue;
+
+    let score = 0;
+    if (item.type === "weapon" && item.effect) {
+      const currentAmount = equippedWeapon?.item.effect?.amount ?? 0;
+      if (item.effect.amount > currentAmount) {
+        score = item.effect.amount - currentAmount;
+      }
+    } else if (item.type === "armor" && item.effect) {
+      const currentAmount = equippedArmor?.item.effect?.amount ?? 0;
+      if (item.effect.amount > currentAmount) {
+        score = item.effect.amount - currentAmount;
+      }
+    } else if ((item.type === "potion" || item.type === "food") && item.effect?.stat === "health") {
+      const hasHealing = inventory.some(
+        (s) => (s.item.type === "potion" || s.item.type === "food") && s.item.effect?.stat === "health",
+      );
+      if (!hasHealing) score = 3;
+    }
+
+    if (score <= 0) continue;
+
+    const priority = score / Math.max(1, distance);
+    if (priority > bestScore) {
+      bestScore = priority;
+      bestItem = groundItem;
+    }
+  }
+
+  return bestItem;
+}
 
 function autoEquipBest(
   get: () => GameStore,
