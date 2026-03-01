@@ -12,9 +12,13 @@ import type {
   PredictedAction,
   HudPanel,
   ItemDef,
+  SmartPlan,
+  PlanStep,
 } from "../engine/types";
-import { ROOMS } from "../content/rooms";
+import { generatePlan, clearPlannerClient } from "../engine/planner";
+import { createRooms } from "../content/rooms";
 import { QUESTS } from "../content/quests";
+import { setSeed, getSeed } from "../engine/rng";
 import {
   sfxStep,
   sfxPickup,
@@ -52,6 +56,11 @@ export interface GameStore {
   turnCount: number;
   combatTarget: NPCDef | null;
   autopilot: boolean;
+  seed: number;
+  smartPlanner: boolean;
+  smartPlan: SmartPlan | null;
+  plannerLoading: boolean;
+  recentMoves: string[];
 
   move: (dir: Direction) => void;
   interact: () => void;
@@ -69,12 +78,19 @@ export interface GameStore {
   processCommand: (command: string) => void;
   toggleAutopilot: () => void;
   getAutopilotAction: () => (() => void) | null;
+  newGame: (seed?: number) => void;
+  toggleSmartPlanner: () => void;
+  requestReplan: () => void;
+  getSmartAction: () => (() => void) | null;
 }
 
 let msgId = 0;
 
-function cloneRooms(): Record<string, Room> {
-  return JSON.parse(JSON.stringify(ROOMS));
+const defaultSeed = Math.floor(Math.random() * 2147483647);
+
+function cloneRooms(seed?: number): Record<string, Room> {
+  setSeed(seed ?? defaultSeed);
+  return JSON.parse(JSON.stringify(createRooms()));
 }
 
 function cloneQuests(): Record<string, QuestDef> {
@@ -124,6 +140,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   turnCount: 0,
   combatTarget: null,
   autopilot: false,
+  seed: defaultSeed,
+  smartPlanner: false,
+  smartPlan: null,
+  plannerLoading: false,
+  recentMoves: [],
 
   move(dir: Direction) {
     const state = get();
@@ -194,16 +215,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
     recentPositions.push({ x: position.x, y: position.y });
     if (recentPositions.length > MAX_RECENT) recentPositions.shift();
 
+    const newTurn = state.turnCount + 1;
+    const moves = [...state.recentMoves, `Turn ${newTurn}: move ${dir} to (${nx},${ny})`];
+    if (moves.length > 30) moves.splice(0, moves.length - 30);
+
     set({
       player: { ...state.player, position: { x: nx, y: ny }, facing: dir },
-      turnCount: state.turnCount + 1,
+      turnCount: newTurn,
       combatTarget: null,
+      recentMoves: moves,
     });
 
     sfxStep();
     startMusic(room.ambiance);
     updateVisibility(get);
     updateContext(get, set);
+    maybeReplan(get, newTurn);
   },
 
   interact() {
@@ -244,6 +271,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
     sfxPickup();
     get().addMessage(`Picked up ${item.name}.`, "loot");
+    logAction(get, set, `pickup ${item.name}`);
     updateContext(get, set);
   },
 
@@ -266,6 +294,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       set({ player: { ...state.player, stats, inventory } });
       sfxUseItem();
+      logAction(get, set, `use ${item.name}`);
       get().addMessage(`Used ${item.name}. +${item.effect.amount} ${item.effect.stat}.`, "info");
     }
     updateContext(get, set);
@@ -328,6 +357,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     target.health -= dmgToEnemy;
 
     sfxHit();
+    logAction(get, set, `attack ${target.name} for ${dmgToEnemy} dmg`);
     get().addMessage(
       `You hit ${target.name} for ${dmgToEnemy} damage!`,
       "combat",
@@ -433,6 +463,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         Math.floor(Math.random() * nearbyNpc.dialogue.length)
       ];
     sfxTalk();
+    logAction(get, set, `talk to ${nearbyNpc.name}`);
     get().addMessage(`${nearbyNpc.name}: "${line}"`, "info");
 
     if (nearbyNpc.questId) {
@@ -469,6 +500,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     quest.status = "active";
     set({ quests });
     sfxQuestAccept();
+    logAction(get, set, `accept quest: ${quest.name}`);
     get().addMessage(`Quest accepted: ${quest.name}`, "quest");
 
     if (!state.activePanels.includes("quests")) {
@@ -551,6 +583,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     } else if (cmd === "autopilot") {
       s.toggleAutopilot();
+    } else if (cmd.startsWith("seed ")) {
+      const seedVal = parseInt(cmd.replace("seed ", ""), 10);
+      if (!isNaN(seedVal)) {
+        s.newGame(seedVal);
+      } else {
+        s.addMessage("Usage: seed <number>", "system");
+      }
+    } else if (cmd === "new game" || cmd === "restart") {
+      s.newGame();
+    } else if (cmd === "seed") {
+      s.addMessage(`Current seed: ${s.seed}`, "system");
+    } else if (cmd === "planner" || cmd === "smart") {
+      s.toggleSmartPlanner();
+    } else if (cmd.startsWith("setkey ")) {
+      const key = command.slice(7).trim();
+      localStorage.setItem("openai_api_key", key);
+      clearPlannerClient();
+      s.addMessage("OpenAI API key saved.", "system");
+    } else if (cmd === "replan") {
+      s.requestReplan();
     } else {
       s.addMessage(`Unknown command: "${command}"`, "system");
     }
@@ -567,9 +619,53 @@ export const useGameStore = create<GameStore>((set, get) => ({
     );
   },
 
+  newGame(seed?: number) {
+    const s = seed ?? Math.floor(Math.random() * 2147483647);
+    msgId = 0;
+    recentPositions.length = 0;
+    set({
+      player: {
+        position: { x: 8, y: 5 },
+        stats: {
+          health: 40, maxHealth: 40, attack: 5, defense: 3, speed: 5,
+          level: 1, xp: 0, xpToNext: 100, gold: 20,
+        },
+        inventory: [],
+        facing: "down",
+      },
+      currentRoomId: "village",
+      rooms: cloneRooms(s),
+      quests: cloneQuests(),
+      messages: [{
+        id: `msg_${++msgId}`,
+        text: `Seed: ${s}. You arrive at Ashford Village.`,
+        type: "system",
+        timestamp: Date.now(),
+      }],
+      contextActions: [],
+      predictedAction: null,
+      activePanels: ["log"],
+      commandOpen: false,
+      gameOver: false,
+      turnCount: 0,
+      combatTarget: null,
+      autopilot: false,
+      seed: s,
+      smartPlanner: false,
+      smartPlan: null,
+      plannerLoading: false,
+      recentMoves: [],
+    });
+  },
+
   getAutopilotAction() {
     const state = get();
     if (state.gameOver) return null;
+
+    if (state.smartPlanner && state.smartPlan && !state.plannerLoading) {
+      const smartAction = get().getSmartAction();
+      if (smartAction) return smartAction;
+    }
 
     const room = state.rooms[state.currentRoomId];
     if (!room) return null;
@@ -657,7 +753,234 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     return null;
   },
+
+  toggleSmartPlanner() {
+    const current = get().smartPlanner;
+    set({ smartPlanner: !current });
+    get().addMessage(
+      current
+        ? "Smart Planner disengaged."
+        : "Smart Planner engaged. GPT will plan every 100 turns.",
+      "system",
+    );
+    if (!current) {
+      get().requestReplan();
+    }
+  },
+
+  requestReplan() {
+    const state = get();
+    if (state.plannerLoading) return;
+    set({ plannerLoading: true });
+    get().addMessage("Smart Planner: thinking...", "system");
+
+    generatePlan({
+      player: state.player,
+      currentRoomId: state.currentRoomId,
+      rooms: state.rooms,
+      quests: state.quests,
+      recentMoves: state.recentMoves,
+      turnCount: state.turnCount,
+      combatTarget: state.combatTarget,
+    })
+      .then((plan) => {
+        set({ smartPlan: plan, plannerLoading: false });
+        const s = useGameStore.getState();
+        s.addMessage(`Plan: ${plan.summary}`, "system");
+      })
+      .catch((err) => {
+        set({ plannerLoading: false });
+        get().addMessage(`Planner error: ${(err as Error).message}`, "danger");
+      });
+  },
+
+  getSmartAction() {
+    const state = get();
+    const plan = state.smartPlan;
+    if (!plan || plan.steps.length === 0) return null;
+
+    const currentStep = plan.steps.find((s) => !s.done);
+    if (!currentStep) return null;
+
+    const room = state.rooms[state.currentRoomId];
+    if (!room) return null;
+    const { position } = state.player;
+
+    const markDone = () => {
+      const p = get().smartPlan;
+      if (p) {
+        const updated = { ...p, steps: p.steps.map((s) => (s === currentStep ? { ...s, done: true } : s)) };
+        set({ smartPlan: updated });
+      }
+    };
+
+    switch (currentStep.action) {
+      case "attack": {
+        if (state.combatTarget) {
+          return () => get().attackTarget();
+        }
+        const target = room.npcs.find(
+          (n) => n.type === "hostile" && (!currentStep.target || n.name.toLowerCase().includes(currentStep.target.toLowerCase())),
+        );
+        if (target) {
+          const d = dist(position, target.position);
+          if (d <= 1) {
+            set({ combatTarget: target });
+            return () => get().attackTarget();
+          }
+          const dir = chooseDirection(state, room, position);
+          return dir ? () => get().move(dir) : null;
+        }
+        markDone();
+        return null;
+      }
+
+      case "pickup": {
+        const item = room.items.find(
+          (i) => !currentStep.target || i.item.name.toLowerCase().includes(currentStep.target.toLowerCase()),
+        );
+        if (item) {
+          if (item.position.x === position.x && item.position.y === position.y) {
+            return () => { get().pickUpItem(); markDone(); };
+          }
+          const dir = chooseDirectionToward(state, room, position, item.position);
+          return dir ? () => get().move(dir) : null;
+        }
+        markDone();
+        return null;
+      }
+
+      case "talk": {
+        const npc = room.npcs.find(
+          (n) => n.type !== "hostile" && (!currentStep.target || n.name.toLowerCase().includes(currentStep.target.toLowerCase())),
+        );
+        if (npc) {
+          if (dist(position, npc.position) <= 1) {
+            return () => { get().talkToNpc(); markDone(); };
+          }
+          const dir = chooseDirectionToward(state, room, position, npc.position);
+          return dir ? () => get().move(dir) : null;
+        }
+        markDone();
+        return null;
+      }
+
+      case "quest": {
+        const npc = room.npcs.find(
+          (n) => n.questId && n.type !== "hostile",
+        );
+        if (npc?.questId) {
+          const quest = state.quests[npc.questId];
+          if (quest?.status === "available") {
+            if (dist(position, npc.position) <= 1) {
+              return () => { get().talkToNpc(); get().acceptQuest(quest.id); markDone(); };
+            }
+            const dir = chooseDirectionToward(state, room, position, npc.position);
+            return dir ? () => get().move(dir) : null;
+          }
+        }
+        markDone();
+        return null;
+      }
+
+      case "use_item": {
+        const slot = state.player.inventory.find(
+          (s) => !currentStep.target || s.item.name.toLowerCase().includes(currentStep.target.toLowerCase()),
+        );
+        if (slot) {
+          return () => { get().useItem(slot.item.id); markDone(); };
+        }
+        markDone();
+        return null;
+      }
+
+      case "move":
+      case "explore": {
+        if (currentStep.room && currentStep.room !== state.currentRoomId) {
+          const exit = room.exits.find((e) => e.targetRoomId === currentStep.room);
+          if (exit) {
+            if (exit.position.x === position.x && exit.position.y === position.y) {
+              markDone();
+            }
+            const dir = chooseDirectionToward(state, room, position, exit.position);
+            return dir ? () => get().move(dir) : null;
+          }
+        }
+        markDone();
+        return null;
+      }
+
+      default:
+        markDone();
+        return null;
+    }
+  },
 }));
+
+function logAction(
+  get: () => GameStore,
+  set: (partial: Partial<GameStore>) => void,
+  desc: string,
+) {
+  const state = get();
+  const moves = [...state.recentMoves, `Turn ${state.turnCount}: ${desc}`];
+  if (moves.length > 30) moves.splice(0, moves.length - 30);
+  set({ recentMoves: moves });
+}
+
+function maybeReplan(get: () => GameStore, turn: number) {
+  const state = get();
+  if (!state.smartPlanner) return;
+  const plan = state.smartPlan;
+  if (!plan || turn - plan.generatedAtTurn >= 100) {
+    state.requestReplan();
+  }
+}
+
+function chooseDirectionToward(
+  state: GameStore,
+  room: Room,
+  from: Position,
+  to: Position,
+): Direction | null {
+  const fakeState = { ...state };
+  const fakeRoom = { ...room, npcs: room.npcs.filter((n) => n.type === "hostile" || !(n.position.x === to.x && n.position.y === to.y)) };
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (dx === 0 && dy === 0) return null;
+
+  const allDirs: Direction[] = ["up", "down", "left", "right"];
+  const delta: Record<Direction, Position> = {
+    up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
+    left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
+  };
+  const ranked = allDirs
+    .filter((dir) => {
+      const d = delta[dir];
+      const nx = from.x + d.x;
+      const ny = from.y + d.y;
+      if (nx < 0 || ny < 0 || nx >= room.width || ny >= room.height) return false;
+      if (!room.tiles[ny][nx].walkable) return false;
+      const blocked = fakeRoom.npcs.find(
+        (n) => n.position.x === nx && n.position.y === ny && n.blocking && n.type !== "hostile",
+      );
+      return !blocked;
+    })
+    .sort((a, b) => {
+      const da = delta[a];
+      const db = delta[b];
+      const distA = Math.abs(to.x - (from.x + da.x)) + Math.abs(to.y - (from.y + da.y));
+      const distB = Math.abs(to.x - (from.x + db.x)) + Math.abs(to.y - (from.y + db.y));
+      return distA - distB;
+    });
+
+  if (ranked.length === 0) return null;
+  const fresh = ranked.filter((dir) => {
+    const d = delta[dir];
+    return !recentPositions.some((p) => p.x === from.x + d.x && p.y === from.y + d.y);
+  });
+  return fresh.length > 0 ? fresh[0] : ranked[0];
+}
 
 function chooseDirection(
   state: GameStore,

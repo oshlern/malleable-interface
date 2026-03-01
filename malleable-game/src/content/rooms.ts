@@ -1,5 +1,6 @@
 import type { Room, Tile, NPCDef, Position } from "../engine/types";
 import { ITEMS } from "./items";
+import { random } from "../engine/rng";
 
 function makeTile(
   type: Tile["type"],
@@ -65,7 +66,7 @@ function placeEntities(room: Room): void {
 
   function pickSpot(): Position {
     for (let attempt = 0; attempt < 200; attempt++) {
-      const pos = floors[Math.floor(Math.random() * floors.length)];
+      const pos = floors[Math.floor(random() * floors.length)];
       const key = `${pos.x},${pos.y}`;
       if (!taken.has(key)) {
         taken.add(key);
@@ -247,7 +248,8 @@ const BAT_2: NPCDef = {
 
 // ─── ROOMS ───────────────────────────────────────
 
-export const ROOMS: Record<string, Room> = {
+export function createRooms(): Record<string, Room> {
+  const ROOMS: Record<string, Room> = {
 
   // 1. Starting area — the village
   village: {
@@ -499,8 +501,11 @@ export const ROOMS: Record<string, Room> = {
     ambiance: "forest",
     discovered: false,
   },
-};
+  };
 
-for (const room of Object.values(ROOMS)) {
-  placeEntities(room);
+  for (const room of Object.values(ROOMS)) {
+    placeEntities(room);
+  }
+
+  return ROOMS;
 }

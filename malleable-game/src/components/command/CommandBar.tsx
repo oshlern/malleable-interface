@@ -15,6 +15,9 @@ const SUGGESTIONS = [
   "look",
   "help",
   "autopilot",
+  "seed",
+  "new game",
+  "restart",
 ];
 
 export function CommandBar() {
