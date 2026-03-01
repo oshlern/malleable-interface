@@ -12,9 +12,13 @@ export function PlanPanel() {
     <div className="bg-abyss/95 border border-arcane-500/20 rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b border-arcane-500/10">
         <div className="flex items-center gap-1.5">
-          <Brain size={12} className="text-arcane-400" />
+          {plannerLoading ? (
+            <Loader size={12} className="text-arcane-400 animate-spin" />
+          ) : (
+            <Brain size={12} className="text-arcane-400" />
+          )}
           <span className="text-[10px] font-game text-arcane-400/80 tracking-wider">
-            SMART PLAN
+            {plannerLoading ? "THINKING..." : "SMART PLAN"}
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -26,7 +30,7 @@ export function PlanPanel() {
             {plannerLoading ? "..." : "Replan"}
           </button>
           <button
-            onClick={() => togglePanel("quests")}
+            onClick={() => togglePanel("plan")}
             className="p-0.5 hover:bg-white/10 rounded text-white/30 hover:text-white/60"
           >
             <X size={12} />
@@ -35,18 +39,20 @@ export function PlanPanel() {
       </div>
 
       <div className="p-2 space-y-1.5 max-h-[350px] overflow-y-auto">
-        {plannerLoading && !smartPlan ? (
-          <div className="flex items-center justify-center gap-2 py-4">
-            <Loader size={12} className="text-arcane-400 animate-spin" />
-            <span className="text-[10px] font-ui text-white/30">
-              GPT is thinking...
+        {plannerLoading && (
+          <div className="flex items-center justify-center gap-2 py-2 mb-1 bg-arcane-500/10 rounded-md border border-arcane-500/15">
+            <Loader size={10} className="text-arcane-400 animate-spin" />
+            <span className="text-[9px] font-ui text-arcane-400/60">
+              Generating new plan...
             </span>
           </div>
-        ) : !smartPlan ? (
+        )}
+        {!smartPlan && !plannerLoading && (
           <p className="text-[10px] font-ui text-white/20 text-center py-3">
             No plan yet. Enable Smart Planner to begin.
           </p>
-        ) : (
+        )}
+        {smartPlan && (
           <>
             <p className="text-[9px] font-ui text-arcane-400/60 px-1 mb-2">
               {smartPlan.summary}

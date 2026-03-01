@@ -788,6 +788,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       "system",
     );
     if (!current) {
+      const state = get();
+      if (!state.activePanels.includes("plan")) {
+        set({ activePanels: [...state.activePanels, "plan"] });
+      }
       get().requestReplan();
     }
   },
