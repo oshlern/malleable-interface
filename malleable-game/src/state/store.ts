@@ -219,6 +219,101 @@ function resetRoomMemory() {
   recentRoomPath.length = 0;
 }
 
+interface RoomGoal {
+  targetRoomId: string;
+  nextRoomId: string;
+  distance: number;
+  reason: string;
+}
+
+function findBestRoomGoal(currentRoomId: string, state: GameStore): RoomGoal | null {
+  // BFS from current room to find the nearest interesting destination
+  const visited = new Set<string>([currentRoomId]);
+  // Queue entries: [roomId, first step roomId from current, distance]
+  const queue: Array<[string, string | null, number]> = [];
+
+  const currentRoom = state.rooms[currentRoomId];
+  if (!currentRoom) return null;
+
+  for (const exit of currentRoom.exits) {
+    if (!visited.has(exit.targetRoomId)) {
+      visited.add(exit.targetRoomId);
+      queue.push([exit.targetRoomId, exit.targetRoomId, 1]);
+    }
+  }
+
+  let bestGoal: RoomGoal | null = null;
+  let bestScore = -Infinity;
+
+  while (queue.length > 0) {
+    const [roomId, firstStep, distance] = queue.shift()!;
+    const room = state.rooms[roomId];
+    if (!room) continue;
+
+    let score = 0;
+    let reason = "";
+
+    if (!room.discovered) {
+      score = 100 - distance * 5;
+      reason = "undiscovered room";
+    } else {
+      // Check if this discovered room has exits to undiscovered rooms
+      const hasUnexploredExits = room.exits.some((e) => {
+        const neighbor = state.rooms[e.targetRoomId];
+        return neighbor && !neighbor.discovered;
+      });
+      if (hasUnexploredExits) {
+        score = 80 - distance * 5;
+        reason = "has unexplored exits";
+      }
+
+      // Room has interesting content
+      if (!isRoomCleared(roomId, state)) {
+        const hasHostiles = room.npcs.some((n) => n.type === "hostile");
+        const hasItems = room.items.length > 0;
+        const hasQuest = room.npcs.some((n) => {
+          if (!n.questId) return false;
+          const q = state.quests[n.questId];
+          return q && (q.status === "available" || q.status === "completed");
+        });
+        if (hasQuest) {
+          const s = 70 - distance * 3;
+          if (s > score) { score = s; reason = "has quest NPC"; }
+        }
+        if (hasHostiles) {
+          const s = 50 - distance * 3;
+          if (s > score) { score = s; reason = "has enemies"; }
+        }
+        if (hasItems) {
+          const s = 40 - distance * 3;
+          if (s > score) { score = s; reason = "has items"; }
+        }
+      }
+    }
+
+    // Penalize heavily visited rooms
+    const visits = roomVisitCount.get(roomId) ?? 0;
+    score -= visits * 2;
+
+    if (score > bestScore && firstStep) {
+      bestScore = score;
+      bestGoal = { targetRoomId: roomId, nextRoomId: firstStep, distance, reason };
+    }
+
+    // Continue BFS through discovered rooms only (can't path through undiscovered)
+    if (room.discovered && distance < 6) {
+      for (const exit of room.exits) {
+        if (!visited.has(exit.targetRoomId)) {
+          visited.add(exit.targetRoomId);
+          queue.push([exit.targetRoomId, firstStep!, distance + 1]);
+        }
+      }
+    }
+  }
+
+  return bestGoal;
+}
+
 export const useGameStore = create<GameStore>((set, get) => ({
   player: {
     position: { x: 8, y: 5 },
@@ -1962,26 +2057,28 @@ function chooseDirection(
     targets.push({ pos: itemPos, priority: 7 });
   }
 
-  // Exits — score by exploration value, avoid recently entered and cleared rooms
+  // Use room-level pathfinding to find the best exit
   const recentlyEnteredRoom = lastEnteredFromRoomId && (state.turnCount - turnEnteredRoom) < ENTRY_COOLDOWN_TURNS;
   const looping = isRoomLooping();
+  const roomGoal = findBestRoomGoal(state.currentRoomId, state);
+
   for (const exit of room.exits) {
     if (recentlyEnteredRoom && exit.targetRoomId === lastEnteredFromRoomId) continue;
-
-    // If we're looping between rooms, strongly avoid the rooms in the loop
     if (looping && recentRoomPath.slice(-3).includes(exit.targetRoomId)) continue;
 
     const targetRoom = state.rooms[exit.targetRoomId];
     if (!targetRoom) continue;
 
-    if (!targetRoom.discovered) {
+    // If room-level pathfinding says to go through this exit, boost its priority
+    if (roomGoal && exit.targetRoomId === roomGoal.nextRoomId) {
+      const goalPriority = targetRoom.discovered ? 6 : 8;
+      targets.push({ pos: exit.position, priority: goalPriority });
+    } else if (!targetRoom.discovered) {
       targets.push({ pos: exit.position, priority: 8 });
     } else if (!isRoomCleared(exit.targetRoomId, state)) {
       const visits = roomVisitCount.get(exit.targetRoomId) ?? 0;
-      const staleness = Math.max(1, 6 - visits);
-      targets.push({ pos: exit.position, priority: staleness });
+      targets.push({ pos: exit.position, priority: Math.max(1, 6 - visits) });
     } else {
-      // Cleared rooms are only worth traversing, very low priority
       const visits = roomVisitCount.get(exit.targetRoomId) ?? 0;
       targets.push({ pos: exit.position, priority: Math.max(1, 2 - visits) });
     }
