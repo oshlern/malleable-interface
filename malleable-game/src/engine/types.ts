@@ -121,3 +121,17 @@ export interface GameMessage {
 }
 
 export type HudPanel = "inventory" | "stats" | "quests" | "map" | "log";
+
+export interface PlanStep {
+  action: "move" | "pickup" | "attack" | "talk" | "quest" | "use_item" | "explore";
+  target?: string;
+  room?: string;
+  reason: string;
+  done: boolean;
+}
+
+export interface SmartPlan {
+  steps: PlanStep[];
+  summary: string;
+  generatedAtTurn: number;
+}

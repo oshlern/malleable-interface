@@ -1,4 +1,4 @@
-import type { Room, Tile, NPCDef } from "../engine/types";
+import type { Room, Tile, NPCDef, Position } from "../engine/types";
 import { ITEMS } from "./items";
 
 function makeTile(
@@ -43,10 +43,53 @@ function makeGrid(width: number, height: number, layout: string[]): Tile[][] {
   return grid;
 }
 
+function getFloorTiles(tiles: Tile[][]): Position[] {
+  const positions: Position[] = [];
+  for (let y = 0; y < tiles.length; y++) {
+    for (let x = 0; x < tiles[y].length; x++) {
+      if (tiles[y][x].type === "floor" && tiles[y][x].walkable) {
+        positions.push({ x, y });
+      }
+    }
+  }
+  return positions;
+}
+
+function placeEntities(room: Room): void {
+  const floors = getFloorTiles(room.tiles);
+  const taken = new Set<string>();
+
+  for (const exit of room.exits) {
+    taken.add(`${exit.position.x},${exit.position.y}`);
+  }
+
+  function pickSpot(): Position {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const pos = floors[Math.floor(Math.random() * floors.length)];
+      const key = `${pos.x},${pos.y}`;
+      if (!taken.has(key)) {
+        taken.add(key);
+        return { ...pos };
+      }
+    }
+    return { x: 1, y: 1 };
+  }
+
+  for (const npc of room.npcs) {
+    npc.position = pickSpot();
+  }
+
+  for (const item of room.items) {
+    item.position = pickSpot();
+  }
+}
+
 // ─── NPCs ────────────────────────────────────────
 
+const P0 = { x: 0, y: 0 };
+
 const GUARD: NPCDef = {
-  id: "npc_guard", name: "Captain Aldric", position: { x: 5, y: 4 },
+  id: "npc_guard", name: "Captain Aldric", position: { ...P0 },
   symbol: "A", color: "#60a5fa", blocking: true, type: "friendly",
   health: 60, maxHealth: 60, attack: 10, defense: 8,
   dialogue: [
@@ -58,7 +101,7 @@ const GUARD: NPCDef = {
 };
 
 const MERCHANT: NPCDef = {
-  id: "npc_merchant", name: "Maren the Peddler", position: { x: 10, y: 3 },
+  id: "npc_merchant", name: "Maren the Peddler", position: { ...P0 },
   symbol: "M", color: "#fbbf24", blocking: true, type: "merchant",
   health: 30, maxHealth: 30, attack: 2, defense: 2,
   dialogue: [
@@ -69,7 +112,7 @@ const MERCHANT: NPCDef = {
 };
 
 const OLD_WOMAN: NPCDef = {
-  id: "npc_old_woman", name: "Grandmother Voss", position: { x: 3, y: 8 },
+  id: "npc_old_woman", name: "Grandmother Voss", position: { ...P0 },
   symbol: "V", color: "#c084fc", blocking: true, type: "friendly",
   health: 15, maxHealth: 15, attack: 1, defense: 1,
   dialogue: [
@@ -81,7 +124,7 @@ const OLD_WOMAN: NPCDef = {
 };
 
 const HERMIT: NPCDef = {
-  id: "npc_hermit", name: "Brother Cassius", position: { x: 5, y: 5 },
+  id: "npc_hermit", name: "Brother Cassius", position: { ...P0 },
   symbol: "C", color: "#a78bfa", blocking: true, type: "friendly",
   health: 25, maxHealth: 25, attack: 3, defense: 3,
   dialogue: [
@@ -93,7 +136,7 @@ const HERMIT: NPCDef = {
 };
 
 const ELENA: NPCDef = {
-  id: "npc_elena", name: "Elena (injured)", position: { x: 12, y: 3 },
+  id: "npc_elena", name: "Elena (injured)", position: { ...P0 },
   symbol: "E", color: "#fb7185", blocking: true, type: "friendly",
   health: 8, maxHealth: 30, attack: 6, defense: 3,
   dialogue: [
@@ -105,49 +148,49 @@ const ELENA: NPCDef = {
 };
 
 const RAT_1: NPCDef = {
-  id: "npc_rat_1", name: "Giant Rat", position: { x: 3, y: 3 },
+  id: "npc_rat_1", name: "Giant Rat", position: { ...P0 },
   symbol: "r", color: "#a1a1aa", blocking: true, type: "hostile",
   health: 12, maxHealth: 12, attack: 4, defense: 1,
   dialogue: ["*squeak*"], loot: [ITEMS.rat_tail],
 };
 
 const RAT_2: NPCDef = {
-  id: "npc_rat_2", name: "Giant Rat", position: { x: 11, y: 7 },
+  id: "npc_rat_2", name: "Giant Rat", position: { ...P0 },
   symbol: "r", color: "#a1a1aa", blocking: true, type: "hostile",
   health: 12, maxHealth: 12, attack: 4, defense: 1,
   dialogue: ["*hiss*"], loot: [ITEMS.rat_tail],
 };
 
 const RAT_3: NPCDef = {
-  id: "npc_rat_3", name: "Giant Rat", position: { x: 6, y: 9 },
+  id: "npc_rat_3", name: "Giant Rat", position: { ...P0 },
   symbol: "r", color: "#a1a1aa", blocking: true, type: "hostile",
   health: 15, maxHealth: 15, attack: 5, defense: 2,
   dialogue: ["*screech*"], loot: [ITEMS.health_potion],
 };
 
 const RAT_4: NPCDef = {
-  id: "npc_rat_4", name: "Giant Rat", position: { x: 2, y: 5 },
+  id: "npc_rat_4", name: "Giant Rat", position: { ...P0 },
   symbol: "r", color: "#a1a1aa", blocking: true, type: "hostile",
   health: 12, maxHealth: 12, attack: 4, defense: 1,
   dialogue: ["*squeal*"], loot: [ITEMS.rat_tail],
 };
 
 const SKELETON_1: NPCDef = {
-  id: "npc_skel_1", name: "Skeleton", position: { x: 10, y: 5 },
+  id: "npc_skel_1", name: "Skeleton", position: { ...P0 },
   symbol: "S", color: "#e2e8f0", blocking: true, type: "hostile",
   health: 20, maxHealth: 20, attack: 7, defense: 3,
   dialogue: ["..."], loot: [ITEMS.bone_charm],
 };
 
 const SKELETON_2: NPCDef = {
-  id: "npc_skel_2", name: "Skeleton Archer", position: { x: 3, y: 2 },
+  id: "npc_skel_2", name: "Skeleton Archer", position: { ...P0 },
   symbol: "S", color: "#d4d4d8", blocking: true, type: "hostile",
   health: 18, maxHealth: 18, attack: 9, defense: 2,
   dialogue: ["..."], loot: [ITEMS.gold_pile],
 };
 
 const WRAITH: NPCDef = {
-  id: "npc_wraith", name: "Wraith", position: { x: 7, y: 3 },
+  id: "npc_wraith", name: "Wraith", position: { ...P0 },
   symbol: "W", color: "#818cf8", blocking: true, type: "hostile",
   health: 30, maxHealth: 30, attack: 10, defense: 5,
   dialogue: ["...the music... where is the music..."],
@@ -155,7 +198,7 @@ const WRAITH: NPCDef = {
 };
 
 const WARDEN: NPCDef = {
-  id: "npc_warden", name: "The Warden", position: { x: 8, y: 5 },
+  id: "npc_warden", name: "The Warden", position: { ...P0 },
   symbol: "W", color: "#f87171", blocking: true, type: "hostile",
   health: 45, maxHealth: 45, attack: 12, defense: 6,
   dialogue: ["NONE SHALL PASS."],
@@ -163,7 +206,7 @@ const WARDEN: NPCDef = {
 };
 
 const GHOST: NPCDef = {
-  id: "npc_ghost", name: "The Pianist", position: { x: 8, y: 6 },
+  id: "npc_ghost", name: "The Pianist", position: { ...P0 },
   symbol: "♪", color: "#c4b5fd", blocking: true, type: "friendly",
   health: 1, maxHealth: 1, attack: 0, defense: 0,
   dialogue: [
@@ -175,28 +218,28 @@ const GHOST: NPCDef = {
 };
 
 const SPIDER_1: NPCDef = {
-  id: "npc_spider_1", name: "Cave Spider", position: { x: 4, y: 3 },
+  id: "npc_spider_1", name: "Cave Spider", position: { ...P0 },
   symbol: "x", color: "#65a30d", blocking: true, type: "hostile",
   health: 14, maxHealth: 14, attack: 6, defense: 2,
   dialogue: ["*click click*"], loot: [ITEMS.mushroom_stew],
 };
 
 const SPIDER_2: NPCDef = {
-  id: "npc_spider_2", name: "Cave Spider", position: { x: 10, y: 8 },
+  id: "npc_spider_2", name: "Cave Spider", position: { ...P0 },
   symbol: "x", color: "#65a30d", blocking: true, type: "hostile",
   health: 14, maxHealth: 14, attack: 6, defense: 2,
   dialogue: ["*hissss*"], loot: [ITEMS.bread],
 };
 
 const BAT_1: NPCDef = {
-  id: "npc_bat_1", name: "Shadow Bat", position: { x: 12, y: 2 },
+  id: "npc_bat_1", name: "Shadow Bat", position: { ...P0 },
   symbol: "b", color: "#71717a", blocking: true, type: "hostile",
   health: 8, maxHealth: 8, attack: 5, defense: 1,
   dialogue: ["*screech*"],
 };
 
 const BAT_2: NPCDef = {
-  id: "npc_bat_2", name: "Shadow Bat", position: { x: 3, y: 7 },
+  id: "npc_bat_2", name: "Shadow Bat", position: { ...P0 },
   symbol: "b", color: "#71717a", blocking: true, type: "hostile",
   health: 8, maxHealth: 8, attack: 5, defense: 1,
   dialogue: ["*screech*"],
@@ -231,8 +274,8 @@ export const ROOMS: Record<string, Room> = {
     entities: [],
     npcs: [GUARD, MERCHANT, OLD_WOMAN],
     items: [
-      { item: ITEMS.bread, position: { x: 14, y: 2 } },
-      { item: ITEMS.rusty_dagger, position: { x: 16, y: 9 } },
+      { item: ITEMS.bread, position: { ...P0 } },
+      { item: ITEMS.rusty_dagger, position: { ...P0 } },
     ],
     exits: [
       { direction: "down", targetRoomId: "dungeon_hall", position: { x: 10, y: 13 } },
@@ -266,8 +309,8 @@ export const ROOMS: Record<string, Room> = {
     entities: [],
     npcs: [RAT_1, RAT_2, RAT_3, RAT_4],
     items: [
-      { item: ITEMS.health_potion, position: { x: 15, y: 2 } },
-      { item: ITEMS.torch, position: { x: 1, y: 12 } },
+      { item: ITEMS.health_potion, position: { ...P0 } },
+      { item: ITEMS.torch, position: { ...P0 } },
     ],
     exits: [
       { direction: "up", targetRoomId: "village", position: { x: 10, y: 0 } },
@@ -303,9 +346,9 @@ export const ROOMS: Record<string, Room> = {
     entities: [],
     npcs: [SPIDER_1, SPIDER_2, BAT_1],
     items: [
-      { item: ITEMS.mushroom_stew, position: { x: 14, y: 4 } },
-      { item: ITEMS.scroll_light, position: { x: 2, y: 8 } },
-      { item: ITEMS.old_journal, position: { x: 16, y: 11 } },
+      { item: ITEMS.mushroom_stew, position: { ...P0 } },
+      { item: ITEMS.scroll_light, position: { ...P0 } },
+      { item: ITEMS.old_journal, position: { ...P0 } },
     ],
     exits: [
       { direction: "up", targetRoomId: "dungeon_hall", position: { x: 5, y: 0 } },
@@ -338,8 +381,8 @@ export const ROOMS: Record<string, Room> = {
     entities: [],
     npcs: [HERMIT, BAT_2],
     items: [
-      { item: ITEMS.health_potion, position: { x: 14, y: 7 } },
-      { item: ITEMS.silver_rapier, position: { x: 9, y: 1 } },
+      { item: ITEMS.health_potion, position: { ...P0 } },
+      { item: ITEMS.silver_rapier, position: { ...P0 } },
     ],
     exits: [
       { direction: "up", targetRoomId: "dungeon_hall", position: { x: 7, y: 0 } },
@@ -374,9 +417,9 @@ export const ROOMS: Record<string, Room> = {
     entities: [],
     npcs: [SKELETON_1, SKELETON_2, ELENA],
     items: [
-      { item: ITEMS.iron_sword, position: { x: 14, y: 1 } },
-      { item: ITEMS.locket, position: { x: 1, y: 12 } },
-      { item: ITEMS.greater_health_potion, position: { x: 15, y: 10 } },
+      { item: ITEMS.iron_sword, position: { ...P0 } },
+      { item: ITEMS.locket, position: { ...P0 } },
+      { item: ITEMS.greater_health_potion, position: { ...P0 } },
     ],
     exits: [
       { direction: "up", targetRoomId: "flooded_passage", position: { x: 5, y: 0 } },
@@ -410,8 +453,8 @@ export const ROOMS: Record<string, Room> = {
     entities: [],
     npcs: [WARDEN, WRAITH],
     items: [
-      { item: ITEMS.elixir_of_vigor, position: { x: 9, y: 1 } },
-      { item: ITEMS.scroll_fireball, position: { x: 2, y: 9 } },
+      { item: ITEMS.elixir_of_vigor, position: { ...P0 } },
+      { item: ITEMS.scroll_fireball, position: { ...P0 } },
     ],
     exits: [
       { direction: "up", targetRoomId: "chapel_ruins", position: { x: 7, y: 0 } },
@@ -446,9 +489,9 @@ export const ROOMS: Record<string, Room> = {
     entities: [],
     npcs: [GHOST],
     items: [
-      { item: ITEMS.shadow_blade, position: { x: 9, y: 12 } },
-      { item: ITEMS.sapphire, position: { x: 1, y: 1 } },
-      { item: ITEMS.greater_health_potion, position: { x: 16, y: 12 } },
+      { item: ITEMS.shadow_blade, position: { ...P0 } },
+      { item: ITEMS.sapphire, position: { ...P0 } },
+      { item: ITEMS.greater_health_potion, position: { ...P0 } },
     ],
     exits: [
       { direction: "up", targetRoomId: "ossuary", position: { x: 7, y: 0 } },
@@ -457,3 +500,7 @@ export const ROOMS: Record<string, Room> = {
     discovered: false,
   },
 };
+
+for (const room of Object.values(ROOMS)) {
+  placeEntities(room);
+}
