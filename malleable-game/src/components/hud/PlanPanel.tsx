@@ -1,6 +1,44 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useGameStore } from "../../state/store";
-import { Brain, X, Check, Circle, Loader } from "lucide-react";
+import { Brain, X, Check, Circle } from "lucide-react";
+
+const THINKING_PHASES = [
+  "Analyzing game state...",
+  "Evaluating quests...",
+  "Scanning threats...",
+  "Charting routes...",
+  "Forming strategy...",
+];
+
+function ThinkingIndicator() {
+  const [phase, setPhase] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPhase((p) => (p + 1) % THINKING_PHASES.length);
+    }, 1800);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="mb-1.5 rounded-md border border-arcane-500/20 bg-arcane-500/5 overflow-hidden">
+      <div className="relative h-1.5 bg-arcane-500/10 overflow-hidden">
+        <div className="absolute inset-0 w-1/3 bg-gradient-to-r from-transparent via-arcane-500/60 to-transparent animate-progress-indeterminate" />
+      </div>
+      <div className="px-2.5 py-2 flex items-center gap-2">
+        <div className="relative flex-shrink-0">
+          <Brain size={14} className="text-arcane-400 animate-pulse" />
+          <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-arcane-500 rounded-full animate-ping opacity-40" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <span className="text-[9px] font-ui text-arcane-400/80 block animate-fade-in" key={phase}>
+            {THINKING_PHASES[phase]}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function PlanPanel() {
   const smartPlan = useGameStore((s) => s.smartPlan);
@@ -12,14 +50,15 @@ export function PlanPanel() {
     <div className="bg-abyss/95 border border-arcane-500/20 rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden flex flex-col max-h-full">
       <div className="flex items-center justify-between px-3 py-2 border-b border-arcane-500/10 flex-shrink-0">
         <div className="flex items-center gap-1.5">
-          {plannerLoading ? (
-            <Loader size={12} className="text-arcane-400 animate-spin" />
-          ) : (
-            <Brain size={12} className="text-arcane-400" />
-          )}
+          <Brain size={12} className={plannerLoading ? "text-arcane-400 animate-pulse" : "text-arcane-400"} />
           <span className="text-[10px] font-game text-arcane-400/80 tracking-wider">
-            {plannerLoading ? "THINKING..." : "SMART PLAN"}
+            SMART PLAN
           </span>
+          {plannerLoading && (
+            <span className="text-[7px] font-ui text-arcane-400/50 animate-pulse ml-0.5">
+              ●
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -39,14 +78,7 @@ export function PlanPanel() {
       </div>
 
       <div className="p-2 space-y-1.5 min-h-0 flex-1 overflow-y-auto">
-        {plannerLoading && (
-          <div className="flex items-center justify-center gap-2 py-2 mb-1 bg-arcane-500/10 rounded-md border border-arcane-500/15">
-            <Loader size={10} className="text-arcane-400 animate-spin" />
-            <span className="text-[9px] font-ui text-arcane-400/60">
-              Generating new plan...
-            </span>
-          </div>
-        )}
+        {plannerLoading && <ThinkingIndicator />}
         {!smartPlan && !plannerLoading && (
           <p className="text-[10px] font-ui text-white/20 text-center py-3">
             No plan yet. Enable Smart Planner to begin.
