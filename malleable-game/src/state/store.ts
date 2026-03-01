@@ -85,6 +85,9 @@ function dist(a: Position, b: Position): number {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }
 
+const recentPositions: Position[] = [];
+const MAX_RECENT = 6;
+
 export const useGameStore = create<GameStore>((set, get) => ({
   player: {
     position: { x: 8, y: 5 },
@@ -187,6 +190,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         return;
       }
     }
+
+    recentPositions.push({ x: position.x, y: position.y });
+    if (recentPositions.length > MAX_RECENT) recentPositions.shift();
 
     set({
       player: { ...state.player, position: { x: nx, y: ny }, facing: dir },
@@ -617,23 +623,36 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return () => get().move(moveDir);
     }
 
-    // Fallback: random walkable direction
+    // Fallback: random walkable direction, preferring unvisited tiles
     const dirs: Direction[] = ["up", "down", "left", "right"];
     const shuffled = dirs.sort(() => Math.random() - 0.5);
+    const delta: Record<Direction, Position> = {
+      up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
+      left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
+    };
+    const validFallbacks: Direction[] = [];
     for (const dir of shuffled) {
-      const delta: Record<Direction, Position> = {
-        up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
-        left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
-      };
       const d = delta[dir];
       const nx = position.x + d.x;
       const ny = position.y + d.y;
-      if (nx >= 0 && ny >= 0 && nx < room.width && ny < room.height) {
-        const tile = room.tiles[ny][nx];
-        if (tile.walkable) {
-          return () => get().move(dir);
-        }
-      }
+      if (nx < 0 || ny < 0 || nx >= room.width || ny >= room.height) continue;
+      const tile = room.tiles[ny][nx];
+      if (!tile.walkable) continue;
+      const blocked = room.npcs.find(
+        (n) => n.position.x === nx && n.position.y === ny && n.blocking && n.type !== "hostile",
+      );
+      if (blocked) continue;
+      validFallbacks.push(dir);
+    }
+    if (validFallbacks.length > 0) {
+      const fresh = validFallbacks.filter((dir) => {
+        const d = delta[dir];
+        return !recentPositions.some(
+          (p) => p.x === position.x + d.x && p.y === position.y + d.y,
+        );
+      });
+      const pick = fresh.length > 0 ? fresh[0] : validFallbacks[0];
+      return () => get().move(pick);
     }
 
     return null;
@@ -685,43 +704,50 @@ function chooseDirection(
 
   targets.sort((a, b) => b.priority - a.priority);
   const best = targets[0];
-  const dx = best.pos.x - position.x;
-  const dy = best.pos.y - position.y;
 
-  // Simple greedy pathfinding: move in the axis with larger distance,
-  // check walkability, fall back to the other axis
-  const candidates: Direction[] = [];
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    if (dx > 0) candidates.push("right", dy > 0 ? "down" : "up");
-    else if (dx < 0) candidates.push("left", dy > 0 ? "down" : "up");
-    else candidates.push(dy > 0 ? "down" : "up");
-  } else {
-    if (dy > 0) candidates.push("down", dx > 0 ? "right" : "left");
-    else if (dy < 0) candidates.push("up", dx > 0 ? "right" : "left");
-    else candidates.push(dx > 0 ? "right" : "left");
-  }
+  // Rank all 4 directions by how much they reduce distance to target
+  const allDirs: Direction[] = ["up", "down", "left", "right"];
+  const candidates = allDirs
+    .map((dir) => {
+      const d = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } }[dir];
+      const nx = position.x + d.x;
+      const ny = position.y + d.y;
+      const newDist = Math.abs(best.pos.x - nx) + Math.abs(best.pos.y - ny);
+      return { dir, newDist };
+    })
+    .sort((a, b) => a.newDist - b.newDist)
+    .map((e) => e.dir);
 
   const delta: Record<Direction, Position> = {
     up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
     left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
   };
 
-  for (const dir of candidates) {
+  function isWalkable(dir: Direction): boolean {
     const d = delta[dir];
     const nx = position.x + d.x;
     const ny = position.y + d.y;
-    if (nx >= 0 && ny >= 0 && nx < room.width && ny < room.height) {
-      const tile = room.tiles[ny][nx];
-      if (tile.walkable) {
-        const blockingNpc = room.npcs.find(
-          (n) => n.position.x === nx && n.position.y === ny && n.blocking && n.type !== "hostile",
-        );
-        if (!blockingNpc) return dir;
-      }
-    }
+    if (nx < 0 || ny < 0 || nx >= room.width || ny >= room.height) return false;
+    const tile = room.tiles[ny][nx];
+    if (!tile.walkable) return false;
+    const blockingNpc = room.npcs.find(
+      (n) => n.position.x === nx && n.position.y === ny && n.blocking && n.type !== "hostile",
+    );
+    return !blockingNpc;
   }
 
-  return null;
+  function wasRecentlyVisited(dir: Direction): boolean {
+    const d = delta[dir];
+    const nx = position.x + d.x;
+    const ny = position.y + d.y;
+    return recentPositions.some((p) => p.x === nx && p.y === ny);
+  }
+
+  const walkable = candidates.filter(isWalkable);
+  if (walkable.length === 0) return null;
+
+  const fresh = walkable.filter((d) => !wasRecentlyVisited(d));
+  return fresh.length > 0 ? fresh[0] : walkable[0];
 }
 
 function updateVisibility(get: () => GameStore) {
