@@ -76,7 +76,7 @@ export interface QuestDef {
   name: string;
   description: string;
   objective: string;
-  status: "available" | "active" | "completed" | "failed";
+  status: "available" | "active" | "completed" | "rewarded" | "failed";
   progress: number;
   target: number;
   reward: { xp: number; gold: number; item?: ItemDef };

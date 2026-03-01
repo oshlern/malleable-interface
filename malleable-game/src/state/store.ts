@@ -713,7 +713,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const stats = { ...state.player.stats };
         stats.xp += quest.reward.xp;
         stats.gold += quest.reward.gold;
-        quest.status = "completed";
+        quest.status = "rewarded";
         get().addMessage(
           `Quest rewarded! +${quest.reward.xp} XP, +${quest.reward.gold} Gold`,
           "quest",
@@ -1440,7 +1440,7 @@ function advanceCustomQuests(
       changed = true;
 
       if (quest.progress >= quest.target) {
-        quest.status = "completed";
+        quest.status = "rewarded";
         const stats = { ...state.player.stats };
         stats.xp += quest.reward.xp;
         stats.gold += quest.reward.gold;
