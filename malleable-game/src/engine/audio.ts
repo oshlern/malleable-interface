@@ -5,6 +5,15 @@ let sfxGain: GainNode | null = null;
 let musicPlaying = false;
 let musicTimeout: ReturnType<typeof setTimeout> | null = null;
 let currentAmbiance: string = "town";
+let nearEnemies = false;
+let inCombat = false;
+let lowHealth = false;
+
+export function setMusicReactivity(options: { nearEnemies?: boolean; inCombat?: boolean; lowHealth?: boolean }) {
+  if (options.nearEnemies !== undefined) nearEnemies = options.nearEnemies;
+  if (options.inCombat !== undefined) inCombat = options.inCombat;
+  if (options.lowHealth !== undefined) lowHealth = options.lowHealth;
+}
 
 function getCtx(): AudioContext {
   if (!ctx) {
@@ -619,10 +628,27 @@ function playPhrase(phrase: Phrase, t: number, _ambiance: string) {
   }
 }
 
+function playHeartbeat(t: number) {
+  if (!musicGain) return;
+  playTone(40, 0.08, "sine", musicGain, t, 0.06);
+  playTone(45, 0.06, "sine", musicGain, t + 0.12, 0.04);
+}
+
 function playMusicPhrase(ambiance: string) {
   if (!musicPlaying) return;
   const c = getCtx();
   const t = c.currentTime;
+
+  if (lowHealth) {
+    playHeartbeat(t);
+    playHeartbeat(t + 2);
+  }
+
+  if (inCombat && musicGain) {
+    playTone(N.E3 / 2, 2.0, "sawtooth", musicGain, t, 0.025);
+  } else if (nearEnemies && musicGain) {
+    playTone(N.E3 / 4, 3.0, "sawtooth", musicGain, t, 0.015);
+  }
 
   const phrases = PHRASE_SETS[ambiance] || PHRASE_SETS.dungeon;
   const phraseIdx = pickPhraseIndex(phrases);
@@ -689,11 +715,12 @@ function playMusicPhrase(ambiance: string) {
   }
 
   phraseCount++;
-  const nextDelay = ambiance === "cave"
+  let nextDelay = ambiance === "cave"
     ? 6000 + Math.random() * 3000
     : ambiance === "boss"
       ? 3500 + Math.random() * 1500
       : 5000 + Math.random() * 2500;
+  if (inCombat) nextDelay *= 0.6;
   musicTimeout = setTimeout(() => playMusicPhrase(currentAmbiance), nextDelay);
 }
 

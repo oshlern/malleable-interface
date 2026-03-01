@@ -39,6 +39,7 @@ import {
   sfxTabComplete,
   startMusic,
   changeAmbiance,
+  setMusicReactivity,
 } from "../engine/audio";
 import {
   saveGame as saveGameToStorage,
@@ -1859,6 +1860,16 @@ function updateContext(
       };
     }
   }
+
+  const hasNearbyEnemies = room.npcs.some(
+    (n) => n.type === "hostile" &&
+    Math.abs(n.position.x - position.x) + Math.abs(n.position.y - position.y) <= 5,
+  );
+  setMusicReactivity({
+    nearEnemies: hasNearbyEnemies,
+    inCombat: state.combatTarget !== null,
+    lowHealth: state.player.stats.health < state.player.stats.maxHealth * 0.3,
+  });
 
   set({ contextActions: actions, predictedAction: predicted });
 }
