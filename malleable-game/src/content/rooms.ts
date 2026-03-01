@@ -143,6 +143,7 @@ const MERCHANT: NPCDef = {
     "Business is slow since the music stopped.",
     "They say a pianist once played in the chapel below. Now only silence.",
   ],
+  questId: "quest_treasure",
 };
 
 const OLD_WOMAN: NPCDef = {
