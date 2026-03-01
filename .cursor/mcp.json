@@ -1,0 +1,8 @@
+{
+    "mcpServers": {
+        "browsermcp": {
+            "command": "/bin/sh",
+            "args": ["-c", "$SHELL -l -c 'npx @browsermcp/mcp@latest'"]
+        }
+    }
+}

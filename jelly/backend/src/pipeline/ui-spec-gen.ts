@@ -3,7 +3,7 @@ import type {
   UISpecification,
   ViewType,
 } from "@jelly/shared";
-import { getAnthropic } from "../llm/index.js";
+import { getOpenAI } from "../llm/index.js";
 import {
   UI_SPEC_SYSTEM_PROMPT,
   UI_SPEC_FEW_SHOT_EXAMPLE,
@@ -16,7 +16,7 @@ interface ViewGenResult {
 export async function generateUISpec(
   schema: ObjectRelationalSchema,
 ): Promise<UISpecification> {
-  const llm = getAnthropic();
+  const llm = getOpenAI();
 
   const entityList = Object.entries(schema.entities)
     .map(([name, entity]) => {
