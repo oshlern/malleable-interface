@@ -15,7 +15,7 @@ import type {
   SmartPlan,
   PlanStep,
 } from "../engine/types";
-import { generatePlan, clearPlannerClient } from "../engine/planner";
+import { generatePlan } from "../engine/planner";
 import { createRooms } from "../content/rooms";
 import { QUESTS } from "../content/quests";
 import { setSeed, getSeed } from "../engine/rng";
@@ -599,11 +599,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       s.addMessage(`Current seed: ${s.seed}`, "system");
     } else if (cmd === "planner" || cmd === "smart") {
       s.toggleSmartPlanner();
-    } else if (cmd.startsWith("setkey ")) {
-      const key = command.slice(7).trim();
-      localStorage.setItem("openai_api_key", key);
-      clearPlannerClient();
-      s.addMessage("OpenAI API key saved.", "system");
     } else if (cmd === "replan") {
       s.requestReplan();
     } else {

@@ -14,19 +14,15 @@ let client: OpenAI | null = null;
 
 function getClient(): OpenAI {
   if (!client) {
-    const apiKey = localStorage.getItem("openai_api_key") ?? "";
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY ?? "";
     if (!apiKey) {
       throw new Error(
-        "No OpenAI API key found. Set it via /setkey <key> in the command bar.",
+        "No OpenAI API key found. Set VITE_OPENAI_API_KEY in .env",
       );
     }
     client = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
   }
   return client;
-}
-
-export function clearPlannerClient() {
-  client = null;
 }
 
 function serializeMap(room: Room): string {

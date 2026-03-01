@@ -61,7 +61,11 @@ function placeEntities(room: Room): void {
   const taken = new Set<string>();
 
   for (const exit of room.exits) {
-    taken.add(`${exit.position.x},${exit.position.y}`);
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        taken.add(`${exit.position.x + dx},${exit.position.y + dy}`);
+      }
+    }
   }
 
   function pickSpot(): Position {
