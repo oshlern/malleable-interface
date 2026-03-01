@@ -7,6 +7,9 @@ export function ActionBar() {
   const combatTarget = useGameStore((s) => s.combatTarget);
   const autopilot = useGameStore((s) => s.autopilot);
   const toggleAutopilot = useGameStore((s) => s.toggleAutopilot);
+  const smartPlanner = useGameStore((s) => s.smartPlanner);
+  const toggleSmartPlanner = useGameStore((s) => s.toggleSmartPlanner);
+  const plannerLoading = useGameStore((s) => s.plannerLoading);
 
   return (
     <div className="flex items-center justify-between px-4 py-2 bg-abyss/90 border-t border-white/5 backdrop-blur-sm">
@@ -52,6 +55,19 @@ export function ActionBar() {
       )}
 
       <div className="flex items-center gap-3">
+        <button
+          onClick={toggleSmartPlanner}
+          className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[9px] font-ui transition-all ${
+            smartPlanner
+              ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+              : "bg-white/5 border-white/10 text-white/30 hover:text-white/50 hover:border-white/20"
+          }`}
+        >
+          <kbd className="px-1 py-0.5 bg-white/5 rounded text-[8px] font-game">G</kbd>
+          <span>
+            {plannerLoading ? "Planning..." : smartPlanner ? "GPT ON" : "Smart"}
+          </span>
+        </button>
         <button
           onClick={toggleAutopilot}
           className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[9px] font-ui transition-all ${

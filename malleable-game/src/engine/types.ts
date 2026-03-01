@@ -120,7 +120,7 @@ export interface GameMessage {
   timestamp: number;
 }
 
-export type HudPanel = "inventory" | "stats" | "quests" | "map" | "log";
+export type HudPanel = "inventory" | "stats" | "quests" | "map" | "log" | "plan";
 
 export interface PlanStep {
   action: "move" | "pickup" | "attack" | "talk" | "quest" | "use_item" | "explore";

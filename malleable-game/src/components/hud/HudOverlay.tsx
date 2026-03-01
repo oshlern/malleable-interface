@@ -5,7 +5,8 @@ import { StatsPanel } from "./StatsPanel";
 import { QuestPanel } from "./QuestPanel";
 import { LogPanel } from "./LogPanel";
 import { MiniMap } from "./MiniMap";
-import { Package, User, Scroll, Map, MessageSquare } from "lucide-react";
+import { PlanPanel } from "./PlanPanel";
+import { Package, User, Scroll, Map, MessageSquare, Brain } from "lucide-react";
 import type { HudPanel } from "../../engine/types";
 
 const PANEL_MAP: Record<HudPanel, React.ComponentType> = {
@@ -14,6 +15,7 @@ const PANEL_MAP: Record<HudPanel, React.ComponentType> = {
   quests: QuestPanel,
   map: MiniMap,
   log: LogPanel,
+  plan: PlanPanel,
 };
 
 const PANEL_ICONS: Record<HudPanel, React.ReactNode> = {
@@ -22,6 +24,7 @@ const PANEL_ICONS: Record<HudPanel, React.ReactNode> = {
   quests: <Scroll size={14} />,
   map: <Map size={14} />,
   log: <MessageSquare size={14} />,
+  plan: <Brain size={14} />,
 };
 
 const PANEL_KEYS: Record<HudPanel, string> = {
@@ -30,13 +33,14 @@ const PANEL_KEYS: Record<HudPanel, string> = {
   quests: "J",
   map: "M",
   log: "",
+  plan: "G",
 };
 
 export function HudOverlay() {
   const activePanels = useGameStore((s) => s.activePanels);
   const togglePanel = useGameStore((s) => s.togglePanel);
 
-  const allPanels: HudPanel[] = ["inventory", "stats", "quests", "map", "log"];
+  const allPanels: HudPanel[] = ["inventory", "stats", "quests", "map", "log", "plan"];
 
   return (
     <>

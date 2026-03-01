@@ -6,6 +6,7 @@ import { HealthBar } from "./components/hud/HealthBar";
 import { ActionBar } from "./components/hud/ActionBar";
 import { HudOverlay } from "./components/hud/HudOverlay";
 import { CommandBar } from "./components/command/CommandBar";
+import { PauseMenu } from "./components/menu/PauseMenu";
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
         <GameCanvas />
         <HudOverlay />
         <CommandBar />
+        <PauseMenu />
         <GameOver />
       </div>
 

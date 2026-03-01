@@ -88,7 +88,7 @@ function serializeRoomGraph(rooms: Record<string, Room>, currentRoomId: string):
     .join("\n");
 }
 
-function buildPrompt(state: {
+export interface PlannerInput {
   player: { position: Position; stats: PlayerStats; inventory: InventorySlot[] };
   currentRoomId: string;
   rooms: Record<string, Room>;
@@ -96,11 +96,23 @@ function buildPrompt(state: {
   recentMoves: string[];
   turnCount: number;
   combatTarget: NPCDef | null;
-}): string {
+  stuckReason?: string;
+  previousPlan?: SmartPlan;
+}
+
+function buildPrompt(state: PlannerInput): string {
   const room = state.rooms[state.currentRoomId];
 
-  return `You are a strategic planner for a roguelike game. Analyze the current game state and produce a high-level plan of 4-8 steps.
+  const stuckSection = state.stuckReason
+    ? `\n## ⚠️ STUCK DETECTED\n${state.stuckReason}\nThe previous plan is not working. You MUST change strategy — try a different approach, different route, or different goal.\n`
+    : "";
 
+  const prevPlanSection = state.previousPlan
+    ? `\n## Previous Plan (generated at turn ${state.previousPlan.generatedAtTurn})\nSummary: ${state.previousPlan.summary}\nSteps:\n${state.previousPlan.steps.map((s, i) => `${i + 1}. [${s.done ? "DONE" : "PENDING"}] ${s.action}${s.target ? ` → ${s.target}` : ""}${s.room ? ` (in ${s.room})` : ""}: ${s.reason}`).join("\n")}\n`
+    : "";
+
+  return `You are a strategic planner for a roguelike game. Analyze the current game state and produce a high-level plan of 4-8 steps.
+${stuckSection}${prevPlanSection}
 ## Current State (Turn ${state.turnCount})
 
 **Player** at (${state.player.position.x}, ${state.player.position.y}) in ${room.name}
@@ -140,6 +152,9 @@ Produce a plan of 4-8 concrete steps. Consider:
 - Explore undiscovered rooms
 - Fight enemies when strong enough, retreat when weak
 - Accept available quests from NPCs
+- Look at recent actions — if you see repetitive movement patterns (back and forth, loops), the bot is stuck. Choose a DIFFERENT target, room, or approach than what was tried before.
+- If a previous plan is shown with pending steps that aren't progressing, abandon that approach and try something else entirely.
+- The bot navigates using greedy pathfinding. If a target seems unreachable, try going to a different room first or pursuing a different goal.
 
 Return valid JSON matching this schema exactly:
 {
@@ -155,15 +170,7 @@ Return valid JSON matching this schema exactly:
 }`;
 }
 
-export async function generatePlan(state: {
-  player: { position: Position; stats: PlayerStats; inventory: InventorySlot[] };
-  currentRoomId: string;
-  rooms: Record<string, Room>;
-  quests: Record<string, QuestDef>;
-  recentMoves: string[];
-  turnCount: number;
-  combatTarget: NPCDef | null;
-}): Promise<SmartPlan> {
+export async function generatePlan(state: PlannerInput): Promise<SmartPlan> {
   const openai = getClient();
   const prompt = buildPrompt(state);
 

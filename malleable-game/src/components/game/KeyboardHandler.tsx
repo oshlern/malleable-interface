@@ -8,16 +8,35 @@ export function KeyboardHandler() {
   const togglePanel = useGameStore((s) => s.togglePanel);
   const setCommandOpen = useGameStore((s) => s.setCommandOpen);
   const commandOpen = useGameStore((s) => s.commandOpen);
+  const menuOpen = useGameStore((s) => s.menuOpen);
+  const setMenuOpen = useGameStore((s) => s.setMenuOpen);
   const combatTarget = useGameStore((s) => s.combatTarget);
   const contextActions = useGameStore((s) => s.contextActions);
   const toggleAutopilot = useGameStore((s) => s.toggleAutopilot);
+  const toggleSmartPlanner = useGameStore((s) => s.toggleSmartPlanner);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (commandOpen) return;
-
       const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          (target as HTMLElement).blur();
+        }
+        return;
+      }
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (commandOpen) {
+          setCommandOpen(false);
+        } else {
+          setMenuOpen(!menuOpen);
+        }
+        return;
+      }
+
+      if (commandOpen || menuOpen) return;
 
       switch (e.key.toLowerCase()) {
         case "w":
@@ -87,13 +106,13 @@ export function KeyboardHandler() {
           e.preventDefault();
           if (!e.repeat) toggleAutopilot();
           break;
+        case "g":
+          e.preventDefault();
+          if (!e.repeat) toggleSmartPlanner();
+          break;
         case "/":
           e.preventDefault();
           if (!e.repeat) setCommandOpen(true);
-          break;
-        case "escape":
-          e.preventDefault();
-          setCommandOpen(false);
           break;
       }
     }
@@ -107,9 +126,12 @@ export function KeyboardHandler() {
     togglePanel,
     setCommandOpen,
     commandOpen,
+    menuOpen,
+    setMenuOpen,
     combatTarget,
     contextActions,
     toggleAutopilot,
+    toggleSmartPlanner,
   ]);
 
   return null;

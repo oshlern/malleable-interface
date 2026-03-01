@@ -52,6 +52,7 @@ export interface GameStore {
   predictedAction: PredictedAction | null;
   activePanels: HudPanel[];
   commandOpen: boolean;
+  menuOpen: boolean;
   gameOver: boolean;
   turnCount: number;
   combatTarget: NPCDef | null;
@@ -79,8 +80,9 @@ export interface GameStore {
   toggleAutopilot: () => void;
   getAutopilotAction: () => (() => void) | null;
   newGame: (seed?: number) => void;
+  setMenuOpen: (open: boolean) => void;
   toggleSmartPlanner: () => void;
-  requestReplan: () => void;
+  requestReplan: (stuckReason?: string) => void;
   getSmartAction: () => (() => void) | null;
 }
 
@@ -136,6 +138,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   predictedAction: null,
   activePanels: ["log"],
   commandOpen: false,
+  menuOpen: false,
   gameOver: false,
   turnCount: 0,
   combatTarget: null,
@@ -654,8 +657,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
       smartPlanner: false,
       smartPlan: null,
       plannerLoading: false,
+      menuOpen: false,
       recentMoves: [],
     });
+  },
+
+  setMenuOpen(open: boolean) {
+    set({ menuOpen: open });
   },
 
   getAutopilotAction() {
@@ -768,11 +776,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
 
-  requestReplan() {
+  requestReplan(stuckReason?: string) {
     const state = get();
     if (state.plannerLoading) return;
     set({ plannerLoading: true });
-    get().addMessage("Smart Planner: thinking...", "system");
+    get().addMessage(
+      stuckReason ? `Smart Planner: stuck detected — replanning...` : "Smart Planner: thinking...",
+      "system",
+    );
 
     generatePlan({
       player: state.player,
@@ -782,11 +793,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       recentMoves: state.recentMoves,
       turnCount: state.turnCount,
       combatTarget: state.combatTarget,
+      stuckReason,
+      previousPlan: state.smartPlan ?? undefined,
     })
       .then((plan) => {
         set({ smartPlan: plan, plannerLoading: false });
         const s = useGameStore.getState();
         s.addMessage(`Plan: ${plan.summary}`, "system");
+        if (!s.activePanels.includes("plan")) {
+          set({ activePanels: [...s.activePanels, "plan"] });
+        }
       })
       .catch((err) => {
         set({ plannerLoading: false });
@@ -928,12 +944,65 @@ function logAction(
   set({ recentMoves: moves });
 }
 
+function detectStuck(state: GameStore): string | null {
+  if (recentPositions.length < MAX_RECENT) return null;
+
+  // Check for oscillation: if the last N positions only cover 2-3 unique tiles
+  const uniqueTiles = new Set(recentPositions.map((p) => `${p.x},${p.y}`));
+  if (uniqueTiles.size <= 2) {
+    return `Movement oscillation detected: the bot has been alternating between ${uniqueTiles.size} tiles for the last ${recentPositions.length} moves (positions: ${[...uniqueTiles].join(" and ")}). The current path or target is likely blocked or unreachable.`;
+  }
+  if (uniqueTiles.size <= 3 && recentPositions.length >= 6) {
+    return `Movement loop detected: the bot is circling between ${uniqueTiles.size} tiles. It may be stuck trying to reach an inaccessible target.`;
+  }
+
+  // Check if current plan step has stalled (>30 turns on the same step)
+  const plan = state.smartPlan;
+  if (plan) {
+    const currentStep = plan.steps.find((s) => !s.done);
+    if (currentStep) {
+      const turnsSincePlan = state.turnCount - plan.generatedAtTurn;
+      const completedSteps = plan.steps.filter((s) => s.done).length;
+      if (turnsSincePlan > 30 && completedSteps === 0) {
+        return `No plan progress: ${turnsSincePlan} turns have passed since the plan was generated but no steps have been completed. Current step "${currentStep.action}${currentStep.target ? ` → ${currentStep.target}` : ""}" appears stuck.`;
+      }
+    }
+  }
+
+  return null;
+}
+
+const REPLAN_COOLDOWN = 20;
+let lastReplanTurn = -Infinity;
+
 function maybeReplan(get: () => GameStore, turn: number) {
   const state = get();
-  if (!state.smartPlanner) return;
+  if (!state.smartPlanner || state.plannerLoading) return;
+  if (turn - lastReplanTurn < REPLAN_COOLDOWN) return;
+
   const plan = state.smartPlan;
+
+  // Scheduled replan every 100 turns
   if (!plan || turn - plan.generatedAtTurn >= 100) {
+    lastReplanTurn = turn;
     state.requestReplan();
+    return;
+  }
+
+  // All steps completed — need a new plan
+  if (plan.steps.every((s) => s.done)) {
+    lastReplanTurn = turn;
+    state.requestReplan();
+    return;
+  }
+
+  // Stuck detection — only check every 10 turns to avoid spamming
+  if (turn % 10 === 0) {
+    const stuckReason = detectStuck(state);
+    if (stuckReason) {
+      lastReplanTurn = turn;
+      state.requestReplan(stuckReason);
+    }
   }
 }
 

@@ -1,9 +1,12 @@
 import React from "react";
 import { useGameStore } from "../../state/store";
-import { Heart, Shield, Sword, Zap } from "lucide-react";
+import { Heart, Shield, Sword, Zap, Menu } from "lucide-react";
+import { SeedDisplay } from "../shared/SeedDisplay";
 
 export function HealthBar() {
   const stats = useGameStore((s) => s.player.stats);
+  const seed = useGameStore((s) => s.seed);
+  const setMenuOpen = useGameStore((s) => s.setMenuOpen);
   const healthPct = (stats.health / stats.maxHealth) * 100;
   const xpPct = (stats.xp / stats.xpToNext) * 100;
 
@@ -52,6 +55,17 @@ export function HealthBar() {
             style={{ width: `${xpPct}%` }}
           />
         </div>
+      </div>
+
+      <div className="flex items-center gap-2 ml-3">
+        <SeedDisplay seed={seed} />
+        <button
+          onClick={() => setMenuOpen(true)}
+          className="p-1 rounded hover:bg-white/10 text-white/25 hover:text-white/50 transition-colors"
+          title="Menu (Esc)"
+        >
+          <Menu size={14} />
+        </button>
       </div>
     </div>
   );
