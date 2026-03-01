@@ -36,16 +36,28 @@ const PANEL_KEYS: Record<HudPanel, string> = {
   plan: "G",
 };
 
+const LEFT_PANELS: HudPanel[] = ["log", "plan"];
+const RIGHT_PANELS: HudPanel[] = ["inventory", "stats", "quests", "map"];
+
 export function HudOverlay() {
   const activePanels = useGameStore((s) => s.activePanels);
   const togglePanel = useGameStore((s) => s.togglePanel);
 
-  const allPanels: HudPanel[] = ["inventory", "stats", "quests", "map", "log", "plan"];
+  const allPanels: HudPanel[] = [...LEFT_PANELS, ...RIGHT_PANELS];
+  const activeLeft = activePanels.filter((p) => LEFT_PANELS.includes(p));
+  const activeRight = activePanels.filter((p) => RIGHT_PANELS.includes(p));
 
   return (
     <>
+      <div className="absolute top-14 left-12 w-[220px] space-y-2 z-10">
+        {activeLeft.map((panelId) => {
+          const Panel = PANEL_MAP[panelId];
+          return Panel ? <Panel key={panelId} /> : null;
+        })}
+      </div>
+
       <div className="absolute top-14 right-3 w-[220px] space-y-2 z-10">
-        {activePanels.map((panelId) => {
+        {activeRight.map((panelId) => {
           const Panel = PANEL_MAP[panelId];
           return Panel ? <Panel key={panelId} /> : null;
         })}
