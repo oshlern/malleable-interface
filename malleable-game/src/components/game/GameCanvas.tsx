@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useCallback } from "react";
 import { useGameStore } from "../../state/store";
+import { getShakeOffset, updateAndDrawFloatingTexts } from "../../engine/effects";
 
 const TILE_SIZE = 32;
 const FONT = "20px monospace";
@@ -192,9 +193,12 @@ export function GameCanvas() {
 
     const offsetX = Math.floor(w / 2 - player.position.x * TILE_SIZE - TILE_SIZE / 2);
     const offsetY = Math.floor(h / 2 - player.position.y * TILE_SIZE - TILE_SIZE / 2);
+    const shake = getShakeOffset();
+    const finalOffsetX = offsetX + shake.x;
+    const finalOffsetY = offsetY + shake.y;
 
     ctx.save();
-    ctx.translate(offsetX, offsetY);
+    ctx.translate(finalOffsetX, finalOffsetY);
 
     // Tiles
     for (let y = 0; y < room.height; y++) {
@@ -323,6 +327,11 @@ export function GameCanvas() {
     ctx.fillStyle = `rgba(139,92,246,${glow})`;
     ctx.fillText("@", ppx + TILE_SIZE / 2, ppy + TILE_SIZE / 2);
 
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(finalOffsetX, finalOffsetY);
+    updateAndDrawFloatingTexts(ctx);
     ctx.restore();
 
     drawVignette(ctx, w, h);

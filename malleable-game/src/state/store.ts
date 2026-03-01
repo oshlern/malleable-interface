@@ -331,17 +331,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({
       player: { ...state.player, inventory },
       rooms: { ...state.rooms, [state.currentRoomId]: { ...room } },
+      runStats: { ...state.runStats, itemsPickedUp: state.runStats.itemsPickedUp + 1 },
+      runEvents: [...state.runEvents, { turn: state.turnCount, text: `Picked up ${item.name}`, type: "loot" as const }],
     });
     sfxPickup();
     addFloatingText(state.player.position.x * 32 + 16, state.player.position.y * 32, item.name, "#fbbf24");
     get().addMessage(`Picked up ${item.name}.`, "loot");
 
     const quests = { ...get().quests };
+    let questCompleted = false;
+    let questName = "";
     if (item.id === "locket" && quests.quest_locket?.status === "active") {
       quests.quest_locket.progress = 1;
       quests.quest_locket.status = "completed";
       sfxQuestComplete();
       get().addMessage("Quest complete: The Tarnished Locket! Return to Grandmother Voss.", "quest");
+      questCompleted = true;
+      questName = "The Tarnished Locket";
     }
     if (
       (item.id === "gold_pile" || item.id === "sapphire") &&
@@ -352,8 +358,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
       quests.quest_treasure.status = "completed";
       sfxQuestComplete();
       get().addMessage("Quest complete: Buried Fortune! Maren will be pleased.", "quest");
+      questCompleted = true;
+      questName = "Buried Fortune";
     }
-    set({ quests });
+    if (questCompleted) {
+      const s2 = get();
+      set({
+        quests,
+        runStats: { ...s2.runStats, questsCompleted: s2.runStats.questsCompleted + 1 },
+        runEvents: [...s2.runEvents, { turn: state.turnCount, text: `Completed quest: ${questName}`, type: "quest" as const }],
+      });
+    } else {
+      set({ quests });
+    }
 
     logAction(get, set, `pickup ${item.name}`);
     autoEquipBest(get, set);
@@ -371,13 +388,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     if (item.effect && (item.type === "potion" || item.type === "food")) {
       const stats = { ...state.player.stats };
-      if (item.effect.stat === "health") {
+      const isHeal = item.effect.stat === "health";
+      if (isHeal) {
         stats.health = Math.min(stats.maxHealth, stats.health + item.effect.amount);
       }
       slot.quantity -= 1;
       if (slot.quantity <= 0) inventory.splice(slotIdx, 1);
 
-      set({ player: { ...state.player, stats, inventory } });
+      const useRunStats = { ...state.runStats, itemsUsed: state.runStats.itemsUsed + 1 };
+      if (isHeal) useRunStats.healsUsed += 1;
+      set({ player: { ...state.player, stats, inventory }, runStats: useRunStats });
       sfxUseItem();
       addFloatingText(state.player.position.x * 32 + 16, state.player.position.y * 32, `+${item.effect.amount}`, "#4ade80");
       logAction(get, set, `use ${item.name}`);
