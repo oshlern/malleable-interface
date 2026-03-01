@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from "react";
 import { useGameStore } from "../../state/store";
 import { MessageSquare, X } from "lucide-react";
+import { useAmbianceTheme } from "../shared/AmbianceTheme";
 
 const TYPE_COLORS: Record<string, string> = {
   info: "text-white/50",
@@ -14,6 +15,7 @@ const TYPE_COLORS: Record<string, string> = {
 export function LogPanel() {
   const messages = useGameStore((s) => s.messages);
   const togglePanel = useGameStore((s) => s.togglePanel);
+  const theme = useAmbianceTheme();
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -21,10 +23,10 @@ export function LogPanel() {
   }, [messages]);
 
   return (
-    <div className="bg-abyss/95 border border-white/5 rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+    <div className={`${theme.panelBg} border ${theme.panelBorder} rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden`}>
+      <div className={`flex items-center justify-between px-3 py-2 ${theme.headerBg}`}>
         <div className="flex items-center gap-1.5">
-          <MessageSquare size={12} className="text-white/40" />
+          <MessageSquare size={12} className={theme.accentColor} />
           <span className="text-[10px] font-game text-white/60 tracking-wider">
             LOG
           </span>

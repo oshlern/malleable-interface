@@ -1,20 +1,22 @@
 import React from "react";
 import { useGameStore } from "../../state/store";
 import { Scroll, X, Check, Circle } from "lucide-react";
+import { useAmbianceTheme } from "../shared/AmbianceTheme";
 
 export function QuestPanel() {
   const quests = useGameStore((s) => s.quests);
   const togglePanel = useGameStore((s) => s.togglePanel);
+  const theme = useAmbianceTheme();
 
   const activeQuests = Object.values(quests).filter(
     (q) => q.status === "active" || q.status === "completed",
   );
 
   return (
-    <div className="bg-abyss/95 border border-white/5 rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+    <div className={`${theme.panelBg} border ${theme.panelBorder} rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden`}>
+      <div className={`flex items-center justify-between px-3 py-2 ${theme.headerBg}`}>
         <div className="flex items-center gap-1.5">
-          <Scroll size={12} className="text-yellow-400" />
+          <Scroll size={12} className={theme.accentColor} />
           <span className="text-[10px] font-game text-white/60 tracking-wider">
             QUESTS
           </span>

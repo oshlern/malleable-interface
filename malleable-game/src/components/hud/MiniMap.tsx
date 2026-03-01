@@ -1,12 +1,14 @@
 import React from "react";
 import { useGameStore } from "../../state/store";
 import { Map, X } from "lucide-react";
+import { useAmbianceTheme } from "../shared/AmbianceTheme";
 
 export function MiniMap() {
   const rooms = useGameStore((s) => s.rooms);
   const currentRoomId = useGameStore((s) => s.currentRoomId);
   const player = useGameStore((s) => s.player);
   const togglePanel = useGameStore((s) => s.togglePanel);
+  const theme = useAmbianceTheme();
 
   const room = rooms[currentRoomId];
   if (!room) return null;
@@ -14,10 +16,10 @@ export function MiniMap() {
   const scale = 4;
 
   return (
-    <div className="bg-abyss/95 border border-white/5 rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+    <div className={`${theme.panelBg} border ${theme.panelBorder} rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden`}>
+      <div className={`flex items-center justify-between px-3 py-2 ${theme.headerBg}`}>
         <div className="flex items-center gap-1.5">
-          <Map size={12} className="text-heal-400" />
+          <Map size={12} className={theme.accentColor} />
           <span className="text-[10px] font-game text-white/60 tracking-wider">
             MAP
           </span>

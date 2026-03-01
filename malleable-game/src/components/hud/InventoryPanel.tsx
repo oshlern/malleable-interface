@@ -1,6 +1,7 @@
 import React from "react";
 import { useGameStore } from "../../state/store";
 import { Package, X } from "lucide-react";
+import { useAmbianceTheme } from "../shared/AmbianceTheme";
 
 export function InventoryPanel() {
   const inventory = useGameStore((s) => s.player.inventory);
@@ -8,12 +9,13 @@ export function InventoryPanel() {
   const equipItem = useGameStore((s) => s.equipItem);
   const dropItem = useGameStore((s) => s.dropItem);
   const togglePanel = useGameStore((s) => s.togglePanel);
+  const theme = useAmbianceTheme();
 
   return (
-    <div className="bg-abyss/95 border border-white/5 rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+    <div className={`${theme.panelBg} border ${theme.panelBorder} rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden`}>
+      <div className={`flex items-center justify-between px-3 py-2 ${theme.headerBg}`}>
         <div className="flex items-center gap-1.5">
-          <Package size={12} className="text-ember-400" />
+          <Package size={12} className={theme.accentColor} />
           <span className="text-[10px] font-game text-white/60 tracking-wider">
             INVENTORY
           </span>

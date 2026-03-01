@@ -1,10 +1,12 @@
 import React from "react";
 import { useGameStore } from "../../state/store";
 import { User, X } from "lucide-react";
+import { useAmbianceTheme } from "../shared/AmbianceTheme";
 
 export function StatsPanel() {
   const stats = useGameStore((s) => s.player.stats);
   const togglePanel = useGameStore((s) => s.togglePanel);
+  const theme = useAmbianceTheme();
 
   const entries: [string, number | string, string][] = [
     ["Health", `${stats.health}/${stats.maxHealth}`, "text-red-400"],
@@ -17,10 +19,10 @@ export function StatsPanel() {
   ];
 
   return (
-    <div className="bg-abyss/95 border border-white/5 rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+    <div className={`${theme.panelBg} border ${theme.panelBorder} rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden`}>
+      <div className={`flex items-center justify-between px-3 py-2 ${theme.headerBg}`}>
         <div className="flex items-center gap-1.5">
-          <User size={12} className="text-arcane-400" />
+          <User size={12} className={theme.accentColor} />
           <span className="text-[10px] font-game text-white/60 tracking-wider">
             STATS
           </span>
