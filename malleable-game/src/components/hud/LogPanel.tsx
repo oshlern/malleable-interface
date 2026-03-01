@@ -10,6 +10,7 @@ const TYPE_COLORS: Record<string, string> = {
   quest: "text-arcane-400",
   system: "text-frost-400",
   danger: "text-red-400",
+  narration: "text-amber-300/70 italic",
 };
 
 export function LogPanel() {

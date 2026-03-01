@@ -117,6 +117,10 @@ export function KeyboardHandler() {
           e.preventDefault();
           if (!e.repeat) toggleSmartPlanner();
           break;
+        case "h":
+          e.preventDefault();
+          if (!e.repeat) useGameStore.getState().requestHint();
+          break;
         case "/":
           e.preventDefault();
           if (!e.repeat) setCommandOpen(true);

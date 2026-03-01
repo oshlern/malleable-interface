@@ -24,6 +24,9 @@ const COMMANDS = [
   { name: "save", description: "Save current game" },
   { name: "load", description: "Load saved game" },
   { name: "delete save", description: "Delete saved game" },
+  { name: "hint", description: "Get tactical advice" },
+  { name: "quest ", description: "Create a custom quest (e.g. quest kill all rats)" },
+  { name: "goal ", description: "Set a goal (e.g. goal reach the crypt)" },
 ];
 
 export function CommandBar() {

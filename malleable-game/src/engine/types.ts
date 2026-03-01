@@ -116,7 +116,7 @@ export interface PredictedAction {
 export interface GameMessage {
   id: string;
   text: string;
-  type: "info" | "combat" | "loot" | "quest" | "system" | "danger";
+  type: "info" | "combat" | "loot" | "quest" | "system" | "danger" | "narration";
   timestamp: number;
 }
 

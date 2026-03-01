@@ -47,6 +47,16 @@ import {
   deleteSave as deleteSaveFromStorage,
 } from "../engine/save";
 import { addFloatingText, triggerShake } from "../engine/effects";
+import {
+  evaluateDifficulty,
+  generateAdaptation,
+  type AdaptationAction,
+} from "../engine/difficulty";
+import { generateHint } from "../engine/hints";
+import {
+  generateCustomQuest,
+  checkCustomQuestProgress,
+} from "../engine/quest-gen";
 
 export interface GameStore {
   player: {
@@ -79,6 +89,8 @@ export interface GameStore {
   runStats: RunStats;
   runEvents: RunEvent[];
   statusEffects: StatusEffect[];
+  hint: string | null;
+  hintLoading: boolean;
 
   move: (dir: Direction) => void;
   interact: () => void;
@@ -109,6 +121,8 @@ export interface GameStore {
   toggleSmartPlanner: () => void;
   requestReplan: (stuckReason?: string) => void;
   getSmartAction: () => (() => void) | null;
+  requestHint: () => void;
+  createCustomQuest: (description: string) => void;
 }
 
 let msgId = 0;
@@ -206,6 +220,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   runStats: { ...emptyRunStats },
   runEvents: [],
   statusEffects: [],
+  hint: null,
+  hintLoading: false,
 
   move(dir: Direction) {
     const state = get();
@@ -279,6 +295,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         sfxDoorOpen();
         changeAmbiance(targetRoom.ambiance);
         get().addMessage(`Entered ${targetRoom.name}.`, "info");
+        advanceCustomQuests(get, set, `entered ${targetRoom.name}`);
 
         if (exit.targetRoomId === "chapel_ruins") {
           get().addStatusEffect({ id: "blessed", name: "Blessed", icon: "✨", color: "#a78bfa", turnsRemaining: 20, healPerTurn: 1 });
@@ -341,6 +358,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     updateContext(get, set);
     tickStatusEffects(get, set);
     maybeReplan(get, newTurn);
+    checkAdaptiveDifficulty(get, set, newTurn);
   },
 
   interact() {
@@ -420,6 +438,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     logAction(get, set, `pickup ${item.name}`);
+    advanceCustomQuests(get, set, `picked up ${item.name}`);
     autoEquipBest(get, set);
     updateContext(get, set);
   },
@@ -588,6 +607,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         runStats: atkRunStats,
         runEvents: atkRunEvents,
       });
+      advanceCustomQuests(get, set, `killed ${target.name}`);
     } else {
       const dmgToPlayer = Math.max(1, target.attack - playerDef);
       const stats = { ...state.player.stats };
@@ -872,6 +892,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       s.toggleSmartPlanner();
     } else if (cmd === "replan") {
       s.requestReplan();
+    } else if (cmd === "hint") {
+      s.requestHint();
+    } else if (cmd.startsWith("quest ") || cmd.startsWith("goal ")) {
+      const desc = command.replace(/^(quest|goal)\s+/i, "").trim();
+      if (desc) {
+        s.createCustomQuest(desc);
+      } else {
+        s.addMessage("Usage: quest <description> or goal <description>", "system");
+      }
     } else {
       s.addMessage(`Unknown command: "${command}"`, "system");
     }
@@ -933,6 +962,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       runStats: { ...emptyRunStats },
       runEvents: [],
       statusEffects: [],
+      hint: null,
+      hintLoading: false,
     });
   },
 
@@ -1274,7 +1305,157 @@ export const useGameStore = create<GameStore>((set, get) => ({
         return null;
     }
   },
+
+  requestHint() {
+    const state = get();
+    if (state.hintLoading) return;
+    set({ hintLoading: true, hint: null });
+
+    const room = state.rooms[state.currentRoomId];
+    generateHint({
+      currentRoomId: state.currentRoomId,
+      room,
+      player: state.player,
+      quests: state.quests,
+      turnCount: state.turnCount,
+    })
+      .then((hint) => {
+        set({ hint, hintLoading: false });
+        setTimeout(() => {
+          const cur = useGameStore.getState();
+          if (cur.hint === hint) set({ hint: null });
+        }, 8000);
+      })
+      .catch(() => {
+        set({ hint: "Explore carefully.", hintLoading: false });
+      });
+  },
+
+  createCustomQuest(description: string) {
+    const state = get();
+    get().addMessage(`Creating quest: "${description}"...`, "system");
+
+    generateCustomQuest(description, {
+      rooms: state.rooms,
+      player: state.player,
+      currentRoomId: state.currentRoomId,
+    })
+      .then((quest) => {
+        const quests = { ...useGameStore.getState().quests, [quest.id]: quest };
+        set({ quests });
+        get().addMessage(`Quest created: ${quest.name} — ${quest.objective}`, "quest");
+        sfxQuestAccept();
+        if (!useGameStore.getState().activePanels.includes("quests")) {
+          set({ activePanels: [...useGameStore.getState().activePanels, "quests"] });
+        }
+      })
+      .catch(() => {
+        get().addMessage("Failed to create quest.", "danger");
+      });
+  },
 }));
+
+function checkAdaptiveDifficulty(
+  get: () => GameStore,
+  set: (partial: Partial<GameStore>) => void,
+  turn: number,
+) {
+  if (turn % 30 !== 0 || turn === 0) return;
+
+  const state = get();
+  const assessment = evaluateDifficulty(state.runStats, turn, state.player);
+  if (assessment === "balanced") return;
+
+  const room = state.rooms[state.currentRoomId];
+  generateAdaptation(assessment, {
+    roomName: room.name,
+    playerHealth: state.player.stats.health,
+    playerMaxHealth: state.player.stats.maxHealth,
+    playerLevel: state.player.stats.level,
+    enemyCount: room.npcs.filter((n) => n.type === "hostile").length,
+    turnCount: turn,
+  }).then((result) => {
+    const s = useGameStore.getState();
+    get().addMessage(result.narration, "narration");
+
+    for (const action of result.actions) {
+      switch (action.type) {
+        case "heal_player": {
+          const amt = action.amount ?? 10;
+          const stats = { ...s.player.stats };
+          stats.health = Math.min(stats.maxHealth, stats.health + amt);
+          set({ player: { ...s.player, stats } });
+          break;
+        }
+        case "add_gold": {
+          const amt = action.amount ?? 15;
+          const stats = { ...s.player.stats, gold: s.player.stats.gold + amt };
+          set({ player: { ...s.player, stats } });
+          break;
+        }
+        case "spawn_item": {
+          const itemId = action.itemId || "health_potion";
+          const item = ITEMS[itemId];
+          if (item) {
+            const curRoom = s.rooms[s.currentRoomId];
+            const pos = { x: s.player.position.x, y: s.player.position.y + 1 };
+            curRoom.items.push({ item, position: pos });
+            set({ rooms: { ...s.rooms, [s.currentRoomId]: curRoom } });
+          }
+          break;
+        }
+        case "buff_enemy": {
+          const amt = action.amount ?? 2;
+          for (const roomData of Object.values(s.rooms)) {
+            if (roomData.id === s.currentRoomId) continue;
+            for (const npc of roomData.npcs) {
+              if (npc.type === "hostile") {
+                npc.attack += amt;
+                npc.defense += Math.floor(amt / 2);
+              }
+            }
+          }
+          break;
+        }
+      }
+    }
+  });
+}
+
+function advanceCustomQuests(
+  get: () => GameStore,
+  set: (partial: Partial<GameStore>) => void,
+  eventText: string,
+) {
+  const state = get();
+  const quests = { ...state.quests };
+  let changed = false;
+
+  for (const quest of Object.values(quests)) {
+    if (quest.status !== "active") continue;
+    if (!quest.id.startsWith("quest_custom_")) continue;
+
+    if (checkCustomQuestProgress(quest, eventText)) {
+      quest.progress = Math.min(quest.target, quest.progress + 1);
+      changed = true;
+
+      if (quest.progress >= quest.target) {
+        quest.status = "completed";
+        const stats = { ...state.player.stats };
+        stats.xp += quest.reward.xp;
+        stats.gold += quest.reward.gold;
+        set({ player: { ...state.player, stats } });
+        get().addMessage(
+          `Custom quest complete: ${quest.name}! +${quest.reward.xp} XP, +${quest.reward.gold}g`,
+          "quest",
+        );
+        sfxQuestComplete();
+      }
+    }
+  }
+
+  if (changed) set({ quests });
+}
 
 const MERCHANT_STOCK = [
   "health_potion",
