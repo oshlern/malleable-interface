@@ -105,6 +105,8 @@ function dist(a: Position, b: Position): number {
 
 const recentPositions: Position[] = [];
 const MAX_RECENT = 6;
+let lastTalkedNpcId: string | null = null;
+let lastTalkedTurn = -Infinity;
 
 export const useGameStore = create<GameStore>((set, get) => ({
   player: {
@@ -464,6 +466,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     );
     if (!nearbyNpc) return;
 
+    lastTalkedNpcId = nearbyNpc.id;
+    lastTalkedTurn = state.turnCount;
+
     const line =
       nearbyNpc.dialogue[
         Math.floor(Math.random() * nearbyNpc.dialogue.length)
@@ -714,8 +719,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     }
 
-    // Priority 5: Talk to nearby friendly NPC (only occasionally)
-    if (nearbyFriendly && state.turnCount % 8 === 0) {
+    // Priority 5: Talk to nearby friendly NPC (only occasionally, skip if we just talked to them)
+    if (
+      nearbyFriendly &&
+      state.turnCount % 8 === 0 &&
+      !(nearbyFriendly.id === lastTalkedNpcId && state.turnCount - lastTalkedTurn < 15)
+    ) {
       return () => get().talkToNpc();
     }
 
@@ -1313,7 +1322,7 @@ function updateContext(
         }
       }
 
-      if (!predicted) {
+      if (!predicted && !(nearbyNpc.id === lastTalkedNpcId && state.turnCount - lastTalkedTurn < 15)) {
         predicted = {
           label: `Talk to ${nearbyNpc.name}`,
           confidence: 0.7,

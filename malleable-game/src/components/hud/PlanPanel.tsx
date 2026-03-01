@@ -34,7 +34,7 @@ export function PlanPanel() {
         </div>
       </div>
 
-      <div className="p-2 space-y-1.5 max-h-[220px] overflow-y-auto">
+      <div className="p-2 space-y-1.5 max-h-[350px] overflow-y-auto">
         {plannerLoading && !smartPlan ? (
           <div className="flex items-center justify-center gap-2 py-4">
             <Loader size={12} className="text-arcane-400 animate-spin" />

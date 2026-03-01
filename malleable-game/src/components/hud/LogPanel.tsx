@@ -37,7 +37,7 @@ export function LogPanel() {
         </button>
       </div>
 
-      <div className="p-2 h-[130px] overflow-y-auto">
+      <div className="p-2 h-[260px] overflow-y-auto">
         {messages.slice(-20).map((msg) => (
           <div key={msg.id} className="py-0.5">
             <span
