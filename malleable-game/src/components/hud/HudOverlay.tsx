@@ -49,17 +49,17 @@ export function HudOverlay() {
 
   return (
     <>
-      <div className="absolute top-14 left-12 w-[220px] space-y-2 z-10">
+      <div className="absolute top-14 bottom-14 left-12 w-[220px] flex flex-col gap-2 z-10 overflow-hidden">
         {activeLeft.map((panelId) => {
           const Panel = PANEL_MAP[panelId];
-          return Panel ? <Panel key={panelId} /> : null;
+          return Panel ? <div key={panelId} className="min-h-0 flex-shrink"><Panel /></div> : null;
         })}
       </div>
 
-      <div className="absolute top-14 right-3 w-[220px] space-y-2 z-10">
+      <div className="absolute top-14 bottom-14 right-3 w-[220px] flex flex-col gap-2 z-10 overflow-hidden">
         {activeRight.map((panelId) => {
           const Panel = PANEL_MAP[panelId];
-          return Panel ? <Panel key={panelId} /> : null;
+          return Panel ? <div key={panelId} className="min-h-0 flex-shrink"><Panel /></div> : null;
         })}
       </div>
 

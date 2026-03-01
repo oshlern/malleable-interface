@@ -129,7 +129,13 @@ const emptyRunStats: RunStats = {
   enemiesKilled: 0,
   goldEarned: 0,
   healsUsed: 0,
+  actionCounts: {},
 };
+
+function bumpAction(stats: RunStats, action: string): RunStats {
+  const actionCounts = { ...stats.actionCounts, [action]: (stats.actionCounts[action] ?? 0) + 1 };
+  return { ...stats, actionCounts };
+}
 
 function cloneRooms(seed?: number): Record<string, Room> {
   setSeed(seed ?? defaultSeed);
@@ -254,7 +260,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
         const wasNew = !targetRoom.discovered;
         targetRoom.discovered = true;
-        const moveRunStats = { ...state.runStats, steps: state.runStats.steps + 1 };
+        const moveRunStats = bumpAction({ ...state.runStats, steps: state.runStats.steps + 1 }, "enter room");
         const moveRunEvents = [...state.runEvents];
         if (wasNew) {
           moveRunStats.roomsDiscovered += 1;
@@ -288,7 +294,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           const s2 = get();
           set({
             quests,
-            runStats: { ...s2.runStats, questsCompleted: s2.runStats.questsCompleted + 1 },
+            runStats: bumpAction({ ...s2.runStats, questsCompleted: s2.runStats.questsCompleted + 1 }, "complete quest"),
             runEvents: [...s2.runEvents, { turn: state.turnCount, text: `Completed quest: The Silent Nocturne`, type: "quest" }],
           });
         }
@@ -312,7 +318,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       turnCount: newTurn,
       combatTarget: null,
       recentMoves: moves,
-      runStats: { ...state.runStats, steps: state.runStats.steps + 1 },
+      runStats: bumpAction({ ...state.runStats, steps: state.runStats.steps + 1 }, `move ${dir}`),
     });
 
     sfxStep();
@@ -372,7 +378,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({
       player: { ...state.player, inventory },
       rooms: { ...state.rooms, [state.currentRoomId]: { ...room } },
-      runStats: { ...state.runStats, itemsPickedUp: state.runStats.itemsPickedUp + 1 },
+      runStats: bumpAction({ ...state.runStats, itemsPickedUp: state.runStats.itemsPickedUp + 1 }, "pick up"),
       runEvents: [...state.runEvents, { turn: state.turnCount, text: `Picked up ${item.name}`, type: "loot" as const }],
     });
     sfxPickup();
@@ -406,7 +412,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const s2 = get();
       set({
         quests,
-        runStats: { ...s2.runStats, questsCompleted: s2.runStats.questsCompleted + 1 },
+        runStats: bumpAction({ ...s2.runStats, questsCompleted: s2.runStats.questsCompleted + 1 }, "complete quest"),
         runEvents: [...s2.runEvents, { turn: state.turnCount, text: `Completed quest: ${questName}`, type: "quest" as const }],
       });
     } else {
@@ -436,8 +442,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       slot.quantity -= 1;
       if (slot.quantity <= 0) inventory.splice(slotIdx, 1);
 
-      const useRunStats = { ...state.runStats, itemsUsed: state.runStats.itemsUsed + 1 };
-      if (isHeal) useRunStats.healsUsed += 1;
+      let useRunStats = bumpAction({ ...state.runStats, itemsUsed: state.runStats.itemsUsed + 1 }, "use item");
+      if (isHeal) useRunStats = { ...useRunStats, healsUsed: useRunStats.healsUsed + 1 };
       set({ player: { ...state.player, stats, inventory }, runStats: useRunStats });
       sfxUseItem();
       addFloatingText(state.player.position.x * 32 + 16, state.player.position.y * 32, `+${item.effect.amount}`, "#4ade80");
@@ -511,7 +517,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       "combat",
     );
 
-    const atkRunStats = { ...state.runStats, attacks: state.runStats.attacks + 1, damageDealt: state.runStats.damageDealt + dmgToEnemy };
+    const atkRunStats = bumpAction({ ...state.runStats, attacks: state.runStats.attacks + 1, damageDealt: state.runStats.damageDealt + dmgToEnemy }, "attack");
     const atkRunEvents = [...state.runEvents];
 
     if (target.health <= 0) {
@@ -650,7 +656,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ];
     sfxTalk();
     logAction(get, set, `talk to ${nearbyNpc.name}`);
-    set({ runStats: { ...get().runStats, npcsTalkedTo: get().runStats.npcsTalkedTo + 1 } });
+    set({ runStats: bumpAction({ ...get().runStats, npcsTalkedTo: get().runStats.npcsTalkedTo + 1 }, "talk") });
     get().addMessage(`${nearbyNpc.name}: "${line}"`, "info");
 
     if (nearbyNpc.id === "npc_elena" && state.quests.quest_rescue?.status === "active") {
@@ -712,7 +718,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     quest.status = "active";
     set({
       quests,
-      runStats: { ...state.runStats, questsAccepted: state.runStats.questsAccepted + 1 },
+      runStats: bumpAction({ ...state.runStats, questsAccepted: state.runStats.questsAccepted + 1 }, "accept quest"),
       runEvents: [...state.runEvents, { turn: state.turnCount, text: `Accepted quest: ${quest.name}`, type: "quest" as const }],
     });
     sfxQuestAccept();
@@ -750,7 +756,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     } else {
       inventory.push({ item: { ...itemDef }, quantity: 1, equipped: false });
     }
-    set({ player: { ...state.player, stats, inventory } });
+    set({ player: { ...state.player, stats, inventory }, runStats: bumpAction(state.runStats, "buy") });
     get().addMessage(`Bought ${itemDef.name} for ${price}g.`, "loot");
   },
 
@@ -767,7 +773,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     } else {
       inventory.splice(slotIdx, 1);
     }
-    set({ player: { ...state.player, stats, inventory } });
+    set({ player: { ...state.player, stats, inventory }, runStats: bumpAction(state.runStats, "sell") });
     get().addMessage(`Sold ${slot.item.name} for ${sellPrice}g.`, "loot");
   },
 

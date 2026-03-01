@@ -160,6 +160,7 @@ export interface RunStats {
   enemiesKilled: number;
   goldEarned: number;
   healsUsed: number;
+  actionCounts: Record<string, number>;
 }
 
 export interface RunEvent {

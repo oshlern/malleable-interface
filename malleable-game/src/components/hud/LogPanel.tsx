@@ -23,8 +23,8 @@ export function LogPanel() {
   }, [messages]);
 
   return (
-    <div className={`${theme.panelBg} border ${theme.panelBorder} rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden`}>
-      <div className={`flex items-center justify-between px-3 py-2 ${theme.headerBg}`}>
+    <div className={`${theme.panelBg} border ${theme.panelBorder} rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden flex flex-col max-h-full`}>
+      <div className={`flex items-center justify-between px-3 py-2 ${theme.headerBg} flex-shrink-0`}>
         <div className="flex items-center gap-1.5">
           <MessageSquare size={12} className={theme.accentColor} />
           <span className="text-[10px] font-game text-white/60 tracking-wider">
@@ -39,7 +39,7 @@ export function LogPanel() {
         </button>
       </div>
 
-      <div className="p-2 h-[260px] overflow-y-auto">
+      <div className="p-2 min-h-0 flex-1 overflow-y-auto">
         {messages.slice(-20).map((msg) => (
           <div key={msg.id} className="py-0.5">
             <span

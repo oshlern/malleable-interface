@@ -9,8 +9,8 @@ export function PlanPanel() {
   const requestReplan = useGameStore((s) => s.requestReplan);
 
   return (
-    <div className="bg-abyss/95 border border-arcane-500/20 rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-arcane-500/10">
+    <div className="bg-abyss/95 border border-arcane-500/20 rounded-lg backdrop-blur-sm animate-slide-up overflow-hidden flex flex-col max-h-full">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-arcane-500/10 flex-shrink-0">
         <div className="flex items-center gap-1.5">
           {plannerLoading ? (
             <Loader size={12} className="text-arcane-400 animate-spin" />
@@ -38,7 +38,7 @@ export function PlanPanel() {
         </div>
       </div>
 
-      <div className="p-2 space-y-1.5 max-h-[350px] overflow-y-auto">
+      <div className="p-2 space-y-1.5 min-h-0 flex-1 overflow-y-auto">
         {plannerLoading && (
           <div className="flex items-center justify-center gap-2 py-2 mb-1 bg-arcane-500/10 rounded-md border border-arcane-500/15">
             <Loader size={10} className="text-arcane-400 animate-spin" />
@@ -84,7 +84,7 @@ export function PlanPanel() {
                       </span>
                     )}
                   </div>
-                  <p className="text-[9px] font-ui text-white/30 mt-0.5">
+                  <p className="text-[7px] font-ui text-white/25 mt-0.5 leading-tight">
                     {step.reason}
                   </p>
                 </div>
