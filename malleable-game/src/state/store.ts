@@ -14,6 +14,8 @@ import type {
   ItemDef,
   SmartPlan,
   PlanStep,
+  RunStats,
+  RunEvent,
 } from "../engine/types";
 import { generatePlan } from "../engine/planner";
 import { createRooms } from "../content/rooms";
@@ -36,6 +38,12 @@ import {
   startMusic,
   changeAmbiance,
 } from "../engine/audio";
+import {
+  saveGame as saveGameToStorage,
+  loadGame as loadGameFromStorage,
+  deleteSave as deleteSaveFromStorage,
+} from "../engine/save";
+import { addFloatingText, triggerShake } from "../engine/effects";
 
 export interface GameStore {
   player: {
@@ -62,6 +70,8 @@ export interface GameStore {
   smartPlan: SmartPlan | null;
   plannerLoading: boolean;
   recentMoves: string[];
+  runStats: RunStats;
+  runEvents: RunEvent[];
 
   move: (dir: Direction) => void;
   interact: () => void;
@@ -81,6 +91,9 @@ export interface GameStore {
   getAutopilotAction: () => (() => void) | null;
   newGame: (seed?: number) => void;
   setMenuOpen: (open: boolean) => void;
+  saveGame: () => void;
+  loadGame: () => void;
+  deleteSave: () => void;
   toggleSmartPlanner: () => void;
   requestReplan: (stuckReason?: string) => void;
   getSmartAction: () => (() => void) | null;
@@ -89,6 +102,22 @@ export interface GameStore {
 let msgId = 0;
 
 const defaultSeed = Math.floor(Math.random() * 2147483647);
+
+const emptyRunStats: RunStats = {
+  steps: 0,
+  attacks: 0,
+  damageDealt: 0,
+  damageTaken: 0,
+  itemsPickedUp: 0,
+  itemsUsed: 0,
+  npcsTalkedTo: 0,
+  questsAccepted: 0,
+  questsCompleted: 0,
+  roomsDiscovered: 0,
+  enemiesKilled: 0,
+  goldEarned: 0,
+  healsUsed: 0,
+};
 
 function cloneRooms(seed?: number): Record<string, Room> {
   setSeed(seed ?? defaultSeed);
@@ -150,6 +179,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   smartPlan: null,
   plannerLoading: false,
   recentMoves: [],
+  runStats: { ...emptyRunStats },
+  runEvents: [],
 
   move(dir: Direction) {
     const state = get();
@@ -211,8 +242,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
         sfxDoorOpen();
         changeAmbiance(targetRoom.ambiance);
         get().addMessage(`Entered ${targetRoom.name}.`, "info");
+
+        if (exit.targetRoomId === "crypt" && state.quests.quest_crypt?.status === "active") {
+          const quests = { ...state.quests };
+          quests.quest_crypt.progress = 1;
+          quests.quest_crypt.status = "completed";
+          sfxQuestComplete();
+          get().addMessage("Quest complete: The Silent Nocturne! The Pianist awaits.", "quest");
+          set({ quests });
+        }
+
         updateVisibility(get);
         updateContext(get, set);
+        get().saveGame();
         return;
       }
     }
@@ -277,6 +319,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
     sfxPickup();
     get().addMessage(`Picked up ${item.name}.`, "loot");
+
+    const quests = { ...get().quests };
+    if (item.id === "locket" && quests.quest_locket?.status === "active") {
+      quests.quest_locket.progress = 1;
+      quests.quest_locket.status = "completed";
+      sfxQuestComplete();
+      get().addMessage("Quest complete: The Tarnished Locket! Return to Grandmother Voss.", "quest");
+    }
+    if (
+      (item.id === "gold_pile" || item.id === "sapphire") &&
+      state.currentRoomId === "deep_caves" &&
+      quests.quest_treasure?.status === "active"
+    ) {
+      quests.quest_treasure.progress = 1;
+      quests.quest_treasure.status = "completed";
+      sfxQuestComplete();
+      get().addMessage("Quest complete: Buried Fortune! Maren will be pleased.", "quest");
+    }
+    set({ quests });
+
     logAction(get, set, `pickup ${item.name}`);
     autoEquipBest(get, set);
     updateContext(get, set);
@@ -364,6 +426,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     target.health -= dmgToEnemy;
 
     sfxHit();
+    addFloatingText(target.position.x * 32 + 16, target.position.y * 32, `-${dmgToEnemy}`, "#ef4444");
     logAction(get, set, `attack ${target.name} for ${dmgToEnemy} dmg`);
     get().addMessage(
       `You hit ${target.name} for ${dmgToEnemy} damage!`,
@@ -387,6 +450,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
 
       const xpGain = 15 + target.maxHealth;
+      addFloatingText(target.position.x * 32 + 16, target.position.y * 32, `+${xpGain} XP`, "#a78bfa");
       const stats = { ...state.player.stats };
       stats.xp += xpGain;
       get().addMessage(`Gained ${xpGain} XP.`, "info");
@@ -476,6 +540,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     sfxTalk();
     logAction(get, set, `talk to ${nearbyNpc.name}`);
     get().addMessage(`${nearbyNpc.name}: "${line}"`, "info");
+
+    if (nearbyNpc.id === "npc_elena" && state.quests.quest_rescue?.status === "active") {
+      const quests = { ...state.quests };
+      quests.quest_rescue.progress = 1;
+      quests.quest_rescue.status = "completed";
+      sfxQuestComplete();
+      get().addMessage("Quest complete: No One Left Behind! Elena is safe.", "quest");
+      set({ quests });
+    }
 
     if (nearbyNpc.questId) {
       const quest = state.quests[nearbyNpc.questId];
@@ -605,6 +678,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       s.newGame();
     } else if (cmd === "seed") {
       s.addMessage(`Current seed: ${s.seed}`, "system");
+    } else if (cmd === "save") {
+      s.saveGame();
+    } else if (cmd === "load") {
+      s.loadGame();
+    } else if (cmd === "delete save") {
+      s.deleteSave();
     } else if (cmd === "planner" || cmd === "smart") {
       s.toggleSmartPlanner();
     } else if (cmd === "replan") {
@@ -662,11 +741,48 @@ export const useGameStore = create<GameStore>((set, get) => ({
       plannerLoading: false,
       menuOpen: false,
       recentMoves: [],
+      runStats: { ...emptyRunStats },
+      runEvents: [],
     });
   },
 
   setMenuOpen(open: boolean) {
     set({ menuOpen: open });
+  },
+
+  saveGame() {
+    saveGameToStorage(get());
+    get().addMessage("Game saved.", "system");
+  },
+
+  loadGame() {
+    const data = loadGameFromStorage();
+    if (!data) {
+      get().addMessage("No save found.", "system");
+      return;
+    }
+    set({
+      player: data.player,
+      currentRoomId: data.currentRoomId,
+      rooms: data.rooms,
+      quests: data.quests,
+      messages: data.messages,
+      turnCount: data.turnCount,
+      seed: data.seed,
+      activePanels: data.activePanels,
+      gameOver: data.gameOver,
+      combatTarget: null,
+      contextActions: [],
+      predictedAction: null,
+    });
+    get().addMessage("Game loaded.", "system");
+    updateVisibility(get);
+    updateContext(get, set);
+  },
+
+  deleteSave() {
+    deleteSaveFromStorage();
+    get().addMessage("Save deleted.", "system");
   },
 
   getAutopilotAction() {

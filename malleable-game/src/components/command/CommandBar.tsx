@@ -21,6 +21,9 @@ const COMMANDS = [
   { name: "restart", description: "Restart the game" },
   { name: "planner", description: "Toggle smart planner" },
   { name: "replan", description: "Request a replan" },
+  { name: "save", description: "Save current game" },
+  { name: "load", description: "Load saved game" },
+  { name: "delete save", description: "Delete saved game" },
 ];
 
 export function CommandBar() {

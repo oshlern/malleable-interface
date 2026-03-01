@@ -1,13 +1,16 @@
 import React, { useState } from "react";
 import { useGameStore } from "../../state/store";
 import { SeedDisplay } from "../shared/SeedDisplay";
-import { X, Play, RotateCcw, Hash } from "lucide-react";
+import { X, Play, RotateCcw, Hash, Save, Download } from "lucide-react";
+import { hasSave } from "../../engine/save";
 
 export function PauseMenu() {
   const menuOpen = useGameStore((s) => s.menuOpen);
   const setMenuOpen = useGameStore((s) => s.setMenuOpen);
   const seed = useGameStore((s) => s.seed);
   const newGame = useGameStore((s) => s.newGame);
+  const saveGame = useGameStore((s) => s.saveGame);
+  const loadGame = useGameStore((s) => s.loadGame);
   const turnCount = useGameStore((s) => s.turnCount);
   const stats = useGameStore((s) => s.player.stats);
 
@@ -65,6 +68,31 @@ export function PauseMenu() {
               Esc
             </kbd>
           </button>
+
+          <button
+            onClick={() => saveGame()}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-white/5 hover:bg-arcane-500/10 border border-white/5 hover:border-arcane-500/30 transition-all group"
+          >
+            <Save size={16} className="text-arcane-400" />
+            <span className="font-ui text-sm text-white/70 group-hover:text-white/90">
+              Save Game
+            </span>
+          </button>
+
+          {hasSave() && (
+            <button
+              onClick={() => {
+                loadGame();
+                setMenuOpen(false);
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-white/5 hover:bg-frost-500/10 border border-white/5 hover:border-frost-500/30 transition-all group"
+            >
+              <Download size={16} className="text-frost-400" />
+              <span className="font-ui text-sm text-white/70 group-hover:text-white/90">
+                Load Game
+              </span>
+            </button>
+          )}
 
           <button
             onClick={() => {
