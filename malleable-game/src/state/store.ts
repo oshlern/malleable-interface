@@ -233,11 +233,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
             }
           : { x: Math.floor(targetRoom.width / 2), y: Math.floor(targetRoom.height / 2) };
 
+        const wasNew = !targetRoom.discovered;
         targetRoom.discovered = true;
+        const moveRunStats = { ...state.runStats, steps: state.runStats.steps + 1 };
+        const moveRunEvents = [...state.runEvents];
+        if (wasNew) {
+          moveRunStats.roomsDiscovered += 1;
+          moveRunEvents.push({ turn: state.turnCount, text: `Discovered ${targetRoom.name}`, type: "explore" });
+        }
         set({
           currentRoomId: exit.targetRoomId,
           player: { ...state.player, position: entryPos, facing: dir },
           combatTarget: null,
+          runStats: moveRunStats,
+          runEvents: moveRunEvents,
         });
         sfxDoorOpen();
         changeAmbiance(targetRoom.ambiance);
@@ -249,7 +258,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
           quests.quest_crypt.status = "completed";
           sfxQuestComplete();
           get().addMessage("Quest complete: The Silent Nocturne! The Pianist awaits.", "quest");
-          set({ quests });
+          const s2 = get();
+          set({
+            quests,
+            runStats: { ...s2.runStats, questsCompleted: s2.runStats.questsCompleted + 1 },
+            runEvents: [...s2.runEvents, { turn: state.turnCount, text: `Completed quest: The Silent Nocturne`, type: "quest" }],
+          });
         }
 
         updateVisibility(get);
@@ -271,6 +285,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       turnCount: newTurn,
       combatTarget: null,
       recentMoves: moves,
+      runStats: { ...state.runStats, steps: state.runStats.steps + 1 },
     });
 
     sfxStep();
@@ -318,6 +333,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       rooms: { ...state.rooms, [state.currentRoomId]: { ...room } },
     });
     sfxPickup();
+    addFloatingText(state.player.position.x * 32 + 16, state.player.position.y * 32, item.name, "#fbbf24");
     get().addMessage(`Picked up ${item.name}.`, "loot");
 
     const quests = { ...get().quests };
@@ -363,6 +379,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       set({ player: { ...state.player, stats, inventory } });
       sfxUseItem();
+      addFloatingText(state.player.position.x * 32 + 16, state.player.position.y * 32, `+${item.effect.amount}`, "#4ade80");
       logAction(get, set, `use ${item.name}`);
       get().addMessage(`Used ${item.name}. +${item.effect.amount} ${item.effect.stat}.`, "info");
     }
@@ -493,6 +510,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       stats.health -= dmgToPlayer;
 
       sfxPlayerHurt();
+      addFloatingText(state.player.position.x * 32 + 16, state.player.position.y * 32, `-${dmgToPlayer}`, "#f97316");
+      triggerShake(6, 12);
       get().addMessage(
         `${target.name} hits you for ${dmgToPlayer} damage!`,
         "danger",
@@ -506,6 +525,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           combatTarget: null,
         });
         sfxDeath();
+        triggerShake(12, 30);
         get().addMessage("You have been defeated...", "danger");
         return;
       }

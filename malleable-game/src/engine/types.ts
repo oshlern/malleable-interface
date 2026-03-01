@@ -135,3 +135,25 @@ export interface SmartPlan {
   summary: string;
   generatedAtTurn: number;
 }
+
+export interface RunStats {
+  steps: number;
+  attacks: number;
+  damageDealt: number;
+  damageTaken: number;
+  itemsPickedUp: number;
+  itemsUsed: number;
+  npcsTalkedTo: number;
+  questsAccepted: number;
+  questsCompleted: number;
+  roomsDiscovered: number;
+  enemiesKilled: number;
+  goldEarned: number;
+  healsUsed: number;
+}
+
+export interface RunEvent {
+  turn: number;
+  text: string;
+  type: "combat" | "loot" | "quest" | "explore" | "death";
+}
