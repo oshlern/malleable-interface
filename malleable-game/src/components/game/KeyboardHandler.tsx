@@ -42,6 +42,19 @@ export function KeyboardHandler() {
         return;
       }
 
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const store = useGameStore.getState();
+        if (store.gameOver) return;
+        if (store.autopilot) {
+          const action = store.getAutopilotAction();
+          if (action) action();
+        } else if (!tradeOpen && !commandOpen && !menuOpen) {
+          store.executePredicted();
+        }
+        return;
+      }
+
       if (tradeOpen || commandOpen || menuOpen) return;
 
       switch (e.key.toLowerCase()) {
@@ -80,18 +93,6 @@ export function KeyboardHandler() {
             if (qAction) qAction.action();
           }
           break;
-        case "tab": {
-          e.preventDefault();
-          const store = useGameStore.getState();
-          if (store.gameOver) break;
-          if (store.autopilot) {
-            const action = store.getAutopilotAction();
-            if (action) action();
-          } else {
-            store.executePredicted();
-          }
-          break;
-        }
         case "i":
           e.preventDefault();
           if (!e.repeat) togglePanel("inventory");
