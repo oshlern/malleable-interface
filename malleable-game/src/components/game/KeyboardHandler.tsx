@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useGameStore } from "../../state/store";
 
 export function KeyboardHandler() {
@@ -11,27 +11,6 @@ export function KeyboardHandler() {
   const combatTarget = useGameStore((s) => s.combatTarget);
   const contextActions = useGameStore((s) => s.contextActions);
   const toggleAutopilot = useGameStore((s) => s.toggleAutopilot);
-
-  const tabInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  function stopTabLoop() {
-    if (tabInterval.current) {
-      clearInterval(tabInterval.current);
-      tabInterval.current = null;
-    }
-  }
-
-  function doTabAction() {
-    const store = useGameStore.getState();
-    if (store.gameOver) { stopTabLoop(); return; }
-
-    if (store.autopilot) {
-      const action = store.getAutopilotAction();
-      if (action) action();
-    } else {
-      store.executePredicted();
-    }
-  }
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -76,14 +55,18 @@ export function KeyboardHandler() {
             if (qAction) qAction.action();
           }
           break;
-        case "tab":
+        case "tab": {
           e.preventDefault();
-          if (!e.repeat) {
-            doTabAction();
-            stopTabLoop();
-            tabInterval.current = setInterval(doTabAction, 120);
+          const store = useGameStore.getState();
+          if (store.gameOver) break;
+          if (store.autopilot) {
+            const action = store.getAutopilotAction();
+            if (action) action();
+          } else {
+            store.executePredicted();
           }
           break;
+        }
         case "i":
           e.preventDefault();
           if (!e.repeat) togglePanel("inventory");
@@ -115,25 +98,8 @@ export function KeyboardHandler() {
       }
     }
 
-    function handleKeyUp(e: KeyboardEvent) {
-      if (e.key === "Tab") {
-        stopTabLoop();
-      }
-    }
-
-    function handleBlur() {
-      stopTabLoop();
-    }
-
     window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-    window.addEventListener("blur", handleBlur);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-      window.removeEventListener("blur", handleBlur);
-      stopTabLoop();
-    };
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     move,
     interact,
