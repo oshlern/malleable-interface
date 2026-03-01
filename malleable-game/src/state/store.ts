@@ -470,12 +470,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       "combat",
     );
 
+    const atkRunStats = { ...state.runStats, attacks: state.runStats.attacks + 1, damageDealt: state.runStats.damageDealt + dmgToEnemy };
+    const atkRunEvents = [...state.runEvents];
+
     if (target.health <= 0) {
       sfxEnemyDeath();
       get().addMessage(`${target.name} defeated!`, "combat");
 
       room.npcs = room.npcs.filter((n) => n.id !== target.id);
 
+      let goldFromLoot = 0;
       if (target.loot) {
         for (const lootItem of target.loot) {
           room.items.push({
@@ -483,8 +487,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
             position: { ...target.position },
           });
           get().addMessage(`${target.name} dropped ${lootItem.name}.`, "loot");
+          if (lootItem.type === "treasure") goldFromLoot += lootItem.value;
         }
       }
+
+      atkRunStats.enemiesKilled += 1;
+      atkRunStats.goldEarned += goldFromLoot;
+      atkRunEvents.push({ turn: state.turnCount, text: `Killed ${target.name}`, type: "combat" });
 
       const xpGain = 15 + target.maxHealth;
       addFloatingText(target.position.x * 32 + 16, target.position.y * 32, `+${xpGain} XP`, "#a78bfa");
@@ -504,8 +513,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         get().addMessage(`Level up! You are now level ${stats.level}!`, "system");
       }
 
-      // Quest progress
       const quests = { ...state.quests };
+      let ratQuestCompleted = false;
       if (target.name === "Giant Rat") {
         const q = quests.quest_rats;
         if (q && q.status === "active") {
@@ -514,8 +523,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
             q.status = "completed";
             sfxQuestComplete();
             get().addMessage("Quest complete: Rat Infestation! Return to the guard.", "quest");
+            ratQuestCompleted = true;
           }
         }
+      }
+
+      if (ratQuestCompleted) {
+        atkRunStats.questsCompleted += 1;
+        atkRunEvents.push({ turn: state.turnCount, text: `Completed quest: Rat Infestation`, type: "quest" });
       }
 
       set({
@@ -523,11 +538,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
         player: { ...state.player, stats },
         combatTarget: null,
         quests,
+        runStats: atkRunStats,
+        runEvents: atkRunEvents,
       });
     } else {
       const dmgToPlayer = Math.max(1, target.attack - playerDef);
       const stats = { ...state.player.stats };
       stats.health -= dmgToPlayer;
+
+      atkRunStats.damageTaken += dmgToPlayer;
 
       sfxPlayerHurt();
       addFloatingText(state.player.position.x * 32 + 16, state.player.position.y * 32, `-${dmgToPlayer}`, "#f97316");
@@ -539,10 +558,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       if (stats.health <= 0) {
         stats.health = 0;
+        atkRunEvents.push({ turn: state.turnCount, text: `Killed by ${target.name}`, type: "death" });
         set({
           player: { ...state.player, stats },
           gameOver: true,
           combatTarget: null,
+          runStats: atkRunStats,
+          runEvents: atkRunEvents,
         });
         sfxDeath();
         triggerShake(12, 30);
@@ -553,6 +575,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({
         player: { ...state.player, stats },
         combatTarget: target,
+        runStats: atkRunStats,
+        runEvents: atkRunEvents,
       });
       autoHealIfLow(get, set);
     }
@@ -579,6 +603,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ];
     sfxTalk();
     logAction(get, set, `talk to ${nearbyNpc.name}`);
+    set({ runStats: { ...get().runStats, npcsTalkedTo: get().runStats.npcsTalkedTo + 1 } });
     get().addMessage(`${nearbyNpc.name}: "${line}"`, "info");
 
     if (nearbyNpc.id === "npc_elena" && state.quests.quest_rescue?.status === "active") {
@@ -606,9 +631,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
           `Quest rewarded! +${quest.reward.xp} XP, +${quest.reward.gold} Gold`,
           "quest",
         );
+        const s2 = get();
         set({
           player: { ...state.player, stats },
           quests: { ...state.quests, [quest.id]: quest },
+          runStats: { ...s2.runStats, goldEarned: s2.runStats.goldEarned + quest.reward.gold },
         });
       }
     }
@@ -622,13 +649,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!quest || quest.status !== "available") return;
 
     quest.status = "active";
-    set({ quests });
+    set({
+      quests,
+      runStats: { ...state.runStats, questsAccepted: state.runStats.questsAccepted + 1 },
+      runEvents: [...state.runEvents, { turn: state.turnCount, text: `Accepted quest: ${quest.name}`, type: "quest" as const }],
+    });
     sfxQuestAccept();
     logAction(get, set, `accept quest: ${quest.name}`);
     get().addMessage(`Quest accepted: ${quest.name}`, "quest");
 
     if (!state.activePanels.includes("quests")) {
-      set({ activePanels: [...state.activePanels, "quests"] });
+      set({ activePanels: [...get().activePanels, "quests"] });
     }
     updateContext(get, set);
   },
@@ -814,6 +845,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       combatTarget: null,
       contextActions: [],
       predictedAction: null,
+      runStats: data.runStats ?? { ...emptyRunStats },
+      runEvents: data.runEvents ?? [],
     });
     get().addMessage("Game loaded.", "system");
     updateVisibility(get);

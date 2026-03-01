@@ -13,6 +13,8 @@ type SaveData = Pick<
   | "seed"
   | "activePanels"
   | "gameOver"
+  | "runStats"
+  | "runEvents"
 >;
 
 export function saveGame(store: GameStore): void {
@@ -26,6 +28,8 @@ export function saveGame(store: GameStore): void {
     seed: store.seed,
     activePanels: store.activePanels,
     gameOver: store.gameOver,
+    runStats: store.runStats,
+    runEvents: store.runEvents,
   };
   localStorage.setItem(SAVE_KEY, JSON.stringify(data));
 }
