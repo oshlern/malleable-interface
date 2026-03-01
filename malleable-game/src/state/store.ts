@@ -99,13 +99,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
     inventory: [],
     facing: "down",
   },
-  currentRoomId: "town_square",
+  currentRoomId: "village",
   rooms: cloneRooms(),
   quests: cloneQuests(),
   messages: [
     {
       id: `msg_${++msgId}`,
-      text: "You arrive at the town square. The dungeon entrance lies to the south.",
+      text: "You arrive at Ashford Village. The old dungeon lies to the south. Something stirs below.",
       type: "info",
       timestamp: Date.now(),
     },

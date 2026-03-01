@@ -208,59 +208,124 @@ const SCALES: Record<string, number[]> = {
   boss: [196, 233, 261, 294, 349, 370, 415],
 };
 
+// Recurring melodic baselines per ambiance — each has 3-4 short motifs
+// that cycle and repeat, giving each room a recognizable identity.
+// Notes are scale indices; durations in beats (1 beat ≈ 0.45s).
+interface Motif {
+  notes: number[];    // indices into the room's scale
+  durations: number[];
+  octaves: number[];  // 1 = base, 2 = octave up
+}
+
+const BASELINES: Record<string, Motif[]> = {
+  town: [
+    { notes: [0, 2, 4, 2],    durations: [1, 1, 1.5, 0.5], octaves: [1, 1, 1, 1] },
+    { notes: [4, 3, 2, 0],    durations: [1, 0.5, 0.5, 2], octaves: [1, 1, 1, 1] },
+    { notes: [0, 4, 5, 4, 2], durations: [0.5, 0.5, 1, 0.5, 1.5], octaves: [1, 1, 1, 1, 1] },
+    { notes: [5, 4, 2, 0, 0], durations: [0.5, 0.5, 1, 0.5, 1.5], octaves: [2, 1, 1, 1, 1] },
+  ],
+  dungeon: [
+    { notes: [0, 2, 3, 1],       durations: [1.5, 0.5, 1, 1],     octaves: [1, 1, 1, 1] },
+    { notes: [5, 3, 2, 0],       durations: [0.5, 1, 0.5, 2],     octaves: [1, 1, 1, 1] },
+    { notes: [0, 1, 3, 5, 3, 0], durations: [1, 0.5, 0.5, 0.5, 0.5, 1.5], octaves: [1, 1, 1, 1, 1, 1] },
+  ],
+  cave: [
+    { notes: [0, 3, 2, 0],          durations: [2, 1, 1, 2],         octaves: [1, 1, 1, 1] },
+    { notes: [4, 3, 1, 0],          durations: [1, 1.5, 0.5, 2],     octaves: [1, 1, 1, 1] },
+    { notes: [0, 1, 0, 3, 4],       durations: [1, 0.5, 1, 1, 1.5],  octaves: [1, 1, 1, 1, 1] },
+    { notes: [5, 4, 3, 1, 0],       durations: [0.5, 0.5, 1, 1, 2],  octaves: [1, 1, 1, 1, 1] },
+  ],
+  forest: [
+    { notes: [0, 2, 3, 5, 3],    durations: [0.5, 0.5, 1, 0.5, 1.5], octaves: [1, 1, 1, 1, 1] },
+    { notes: [5, 3, 2, 0],       durations: [1, 0.5, 1, 1.5],        octaves: [2, 1, 1, 1] },
+    { notes: [0, 3, 5, 3, 2, 0], durations: [0.5, 0.5, 0.5, 0.5, 0.5, 1.5], octaves: [1, 1, 2, 1, 1, 1] },
+  ],
+  boss: [
+    { notes: [0, 0, 2, 3, 0],       durations: [0.5, 0.5, 0.5, 0.5, 2], octaves: [1, 1, 1, 1, 1] },
+    { notes: [5, 4, 3, 2, 0, 0],    durations: [0.5, 0.5, 0.5, 0.5, 0.5, 1.5], octaves: [1, 1, 1, 1, 1, 1] },
+    { notes: [0, 3, 5, 6, 5, 3, 0], durations: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1.5], octaves: [1, 1, 1, 1, 1, 1, 1] },
+  ],
+};
+
+let phraseCount = 0;
+
+function playBaseline(ambiance: string, t: number, scale: number[]) {
+  const motifs = BASELINES[ambiance] || BASELINES.dungeon;
+  const motif = motifs[phraseCount % motifs.length];
+
+  const beatLen = ambiance === "boss" ? 0.35 : 0.45;
+  let offset = 0;
+
+  for (let i = 0; i < motif.notes.length; i++) {
+    const idx = Math.min(motif.notes[i], scale.length - 1);
+    const freq = scale[idx] * motif.octaves[i];
+    const dur = motif.durations[i] * beatLen;
+    const noteTime = t + offset;
+
+    playTone(freq, dur * 0.85, "triangle", musicGain!, noteTime, 0.07);
+
+    // subtle harmony on longer notes
+    if (dur > 0.8) {
+      playTone(freq * 0.5, dur, "sine", musicGain!, noteTime, 0.03);
+    }
+
+    offset += dur;
+  }
+}
+
 function playMusicPhrase(ambiance: string) {
   if (!musicPlaying) return;
   const c = getCtx();
   const t = c.currentTime;
   const scale = SCALES[ambiance] || SCALES.dungeon;
 
+  // Low drone
   const droneFreq = scale[0] / 2;
-  playTone(droneFreq, 4.0, "sine", musicGain!, t, 0.06);
-  playTone(droneFreq * 1.5, 4.0, "sine", musicGain!, t, 0.03, 3);
+  playTone(droneFreq, 5.0, "sine", musicGain!, t, 0.05);
+  playTone(droneFreq * 1.5, 5.0, "sine", musicGain!, t, 0.02, 3);
 
-  const phraseLength = 3 + Math.floor(Math.random() * 4);
-  for (let i = 0; i < phraseLength; i++) {
-    const noteIdx = Math.floor(Math.random() * scale.length);
-    const freq = scale[noteIdx];
-    const octave = Math.random() > 0.7 ? 2 : 1;
-    const noteTime = t + 0.5 + i * (0.5 + Math.random() * 0.8);
-    const dur = 0.3 + Math.random() * 0.6;
-    const vol = 0.04 + Math.random() * 0.06;
+  // Play the recurring baseline motif
+  playBaseline(ambiance, t + 0.3, scale);
 
-    playTone(freq * octave, dur, "triangle", musicGain!, noteTime, vol);
-
-    if (Math.random() > 0.6) {
-      playTone(
-        freq * octave * 1.5,
-        dur * 0.7,
-        "sine",
-        musicGain!,
-        noteTime,
-        vol * 0.4,
-        Math.random() * 10 - 5,
-      );
+  // Scattered ambient notes between baseline repeats
+  if (Math.random() > 0.4) {
+    const extraCount = 1 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < extraCount; i++) {
+      const noteIdx = Math.floor(Math.random() * scale.length);
+      const freq = scale[noteIdx] * (Math.random() > 0.75 ? 2 : 1);
+      const noteTime = t + 2.5 + Math.random() * 2.5;
+      const dur = 0.4 + Math.random() * 0.5;
+      playTone(freq, dur, "sine", musicGain!, noteTime, 0.03 + Math.random() * 0.03);
     }
   }
 
+  // Ambiance-specific texture
   if (ambiance === "cave" || ambiance === "dungeon") {
-    if (Math.random() > 0.5) {
-      const dripTime = t + 2 + Math.random() * 3;
-      playTone(1800 + Math.random() * 400, 0.03, "sine", musicGain!, dripTime, 0.03);
-      playTone(1200 + Math.random() * 200, 0.05, "sine", musicGain!, dripTime + 0.03, 0.02);
+    if (Math.random() > 0.4) {
+      const dripTime = t + 3 + Math.random() * 3;
+      playTone(1800 + Math.random() * 400, 0.03, "sine", musicGain!, dripTime, 0.025);
+      playTone(1200 + Math.random() * 200, 0.05, "sine", musicGain!, dripTime + 0.03, 0.015);
     }
   }
 
   if (ambiance === "boss") {
-    for (let i = 0; i < 4; i++) {
-      const beatTime = t + i * 1.0;
-      playTone(55, 0.15, "sawtooth", musicGain!, beatTime, 0.05);
+    for (let i = 0; i < 6; i++) {
+      const beatTime = t + i * 0.7;
+      playTone(55, 0.12, "sawtooth", musicGain!, beatTime, 0.04);
       if (i % 2 === 1) {
-        playNoise(0.08, musicGain!, beatTime + 0.5, 0.03, 500);
+        playNoise(0.06, musicGain!, beatTime + 0.35, 0.025, 500);
       }
     }
   }
 
-  const nextDelay = 3500 + Math.random() * 3000;
+  if (ambiance === "town" && Math.random() > 0.6) {
+    const bellTime = t + 1 + Math.random() * 3;
+    playTone(1047, 0.8, "sine", musicGain!, bellTime, 0.02);
+    playTone(1568, 0.5, "sine", musicGain!, bellTime, 0.01);
+  }
+
+  phraseCount++;
+  const nextDelay = 4000 + Math.random() * 2500;
   musicTimeout = setTimeout(() => playMusicPhrase(currentAmbiance), nextDelay);
 }
 
@@ -275,6 +340,7 @@ export function startMusic(ambiance: string) {
 
 export function changeAmbiance(ambiance: string) {
   currentAmbiance = ambiance;
+  phraseCount = 0;
 }
 
 export function stopMusic() {
