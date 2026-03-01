@@ -44,20 +44,49 @@ function makeGrid(width: number, height: number, layout: string[]): Tile[][] {
   return grid;
 }
 
-function getFloorTiles(tiles: Tile[][]): Position[] {
-  const positions: Position[] = [];
-  for (let y = 0; y < tiles.length; y++) {
-    for (let x = 0; x < tiles[y].length; x++) {
-      if (tiles[y][x].type === "floor" && tiles[y][x].walkable) {
-        positions.push({ x, y });
-      }
+function getReachableFloors(tiles: Tile[][], seeds: Position[]): Position[] {
+  const h = tiles.length;
+  const w = tiles[0].length;
+  const visited = new Set<string>();
+  const queue: Position[] = [];
+
+  for (const s of seeds) {
+    const key = `${s.x},${s.y}`;
+    if (!visited.has(key)) {
+      visited.add(key);
+      queue.push(s);
     }
   }
-  return positions;
+
+  while (queue.length > 0) {
+    const { x, y } = queue.shift()!;
+    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const key = `${nx},${ny}`;
+      if (visited.has(key)) continue;
+      if (!tiles[ny][nx].walkable) continue;
+      visited.add(key);
+      queue.push({ x: nx, y: ny });
+    }
+  }
+
+  const result: Position[] = [];
+  for (const key of visited) {
+    const [xs, ys] = key.split(",");
+    const x = parseInt(xs, 10);
+    const y = parseInt(ys, 10);
+    if (tiles[y][x].type === "floor") {
+      result.push({ x, y });
+    }
+  }
+  return result;
 }
 
 function placeEntities(room: Room): void {
-  const floors = getFloorTiles(room.tiles);
+  const exitPositions = room.exits.map((e) => e.position);
+  const floors = getReachableFloors(room.tiles, exitPositions);
   const taken = new Set<string>();
 
   for (const exit of room.exits) {
