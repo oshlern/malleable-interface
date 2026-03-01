@@ -5,17 +5,33 @@ export function KeyboardHandler() {
   const move = useGameStore((s) => s.move);
   const interact = useGameStore((s) => s.interact);
   const attackTarget = useGameStore((s) => s.attackTarget);
-  const executePredicted = useGameStore((s) => s.executePredicted);
   const togglePanel = useGameStore((s) => s.togglePanel);
   const setCommandOpen = useGameStore((s) => s.setCommandOpen);
   const commandOpen = useGameStore((s) => s.commandOpen);
   const combatTarget = useGameStore((s) => s.combatTarget);
   const contextActions = useGameStore((s) => s.contextActions);
   const toggleAutopilot = useGameStore((s) => s.toggleAutopilot);
-  const autopilot = useGameStore((s) => s.autopilot);
 
-  const tabHeld = useRef(false);
   const tabInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function stopTabLoop() {
+    if (tabInterval.current) {
+      clearInterval(tabInterval.current);
+      tabInterval.current = null;
+    }
+  }
+
+  function doTabAction() {
+    const store = useGameStore.getState();
+    if (store.gameOver) { stopTabLoop(); return; }
+
+    if (store.autopilot) {
+      const action = store.getAutopilotAction();
+      if (action) action();
+    } else {
+      store.executePredicted();
+    }
+  }
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -62,46 +78,35 @@ export function KeyboardHandler() {
           break;
         case "tab":
           e.preventDefault();
-          if (!tabHeld.current) {
-            tabHeld.current = true;
-            executePredicted();
-
-            if (autopilot) {
-              tabInterval.current = setInterval(() => {
-                const store = useGameStore.getState();
-                if (store.gameOver) {
-                  if (tabInterval.current) clearInterval(tabInterval.current);
-                  return;
-                }
-                const action = store.getAutopilotAction();
-                if (action) action();
-              }, 150);
-            }
+          if (!e.repeat) {
+            doTabAction();
+            stopTabLoop();
+            tabInterval.current = setInterval(doTabAction, 120);
           }
           break;
         case "i":
           e.preventDefault();
-          togglePanel("inventory");
+          if (!e.repeat) togglePanel("inventory");
           break;
         case "c":
           e.preventDefault();
-          togglePanel("stats");
+          if (!e.repeat) togglePanel("stats");
           break;
         case "j":
           e.preventDefault();
-          togglePanel("quests");
+          if (!e.repeat) togglePanel("quests");
           break;
         case "m":
           e.preventDefault();
-          togglePanel("map");
+          if (!e.repeat) togglePanel("map");
           break;
         case "p":
           e.preventDefault();
-          toggleAutopilot();
+          if (!e.repeat) toggleAutopilot();
           break;
         case "/":
           e.preventDefault();
-          setCommandOpen(true);
+          if (!e.repeat) setCommandOpen(true);
           break;
         case "escape":
           e.preventDefault();
@@ -112,33 +117,33 @@ export function KeyboardHandler() {
 
     function handleKeyUp(e: KeyboardEvent) {
       if (e.key === "Tab") {
-        tabHeld.current = false;
-        if (tabInterval.current) {
-          clearInterval(tabInterval.current);
-          tabInterval.current = null;
-        }
+        stopTabLoop();
       }
+    }
+
+    function handleBlur() {
+      stopTabLoop();
     }
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
-      if (tabInterval.current) clearInterval(tabInterval.current);
+      window.removeEventListener("blur", handleBlur);
+      stopTabLoop();
     };
   }, [
     move,
     interact,
     attackTarget,
-    executePredicted,
     togglePanel,
     setCommandOpen,
     commandOpen,
     combatTarget,
     contextActions,
     toggleAutopilot,
-    autopilot,
   ]);
 
   return null;
