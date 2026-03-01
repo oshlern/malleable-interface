@@ -232,6 +232,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     sfxStep();
     startMusic(room.ambiance);
     updateVisibility(get);
+    autoHealIfLow(get, set);
     updateContext(get, set);
     maybeReplan(get, newTurn);
   },
@@ -275,6 +276,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     sfxPickup();
     get().addMessage(`Picked up ${item.name}.`, "loot");
     logAction(get, set, `pickup ${item.name}`);
+    autoEquipBest(get, set);
     updateContext(get, set);
   },
 
@@ -446,6 +448,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         player: { ...state.player, stats },
         combatTarget: target,
       });
+      autoHealIfLow(get, set);
     }
     updateContext(get, set);
   },
@@ -927,6 +930,70 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
 }));
+
+function autoEquipBest(
+  get: () => GameStore,
+  set: (partial: Partial<GameStore>) => void,
+) {
+  const state = get();
+  const inventory = [...state.player.inventory];
+  const stats = { ...state.player.stats };
+  let changed = false;
+
+  for (const slotType of ["weapon", "armor"] as const) {
+    const candidates = inventory.filter((s) => s.item.type === slotType && s.item.effect);
+    if (candidates.length === 0) continue;
+
+    const best = candidates.reduce((a, b) =>
+      (b.item.effect?.amount ?? 0) > (a.item.effect?.amount ?? 0) ? b : a,
+    );
+    const equipped = candidates.find((s) => s.equipped);
+
+    if (equipped === best) continue;
+
+    if (equipped) equipped.equipped = false;
+    best.equipped = true;
+    changed = true;
+
+    if (best.item.effect) {
+      if (best.item.effect.stat === "attack") stats.attack = 5 + best.item.effect.amount;
+      if (best.item.effect.stat === "defense") stats.defense = 3 + best.item.effect.amount;
+    }
+
+    get().addMessage(`Auto-equipped ${best.item.name}.`, "info");
+  }
+
+  if (changed) {
+    set({ player: { ...state.player, stats, inventory } });
+  }
+}
+
+function autoHealIfLow(
+  get: () => GameStore,
+  set: (partial: Partial<GameStore>) => void,
+) {
+  const state = get();
+  const { stats, inventory } = state.player;
+  if (stats.health >= stats.maxHealth * 0.35) return;
+
+  const healables = inventory
+    .filter(
+      (s) =>
+        (s.item.type === "potion" || s.item.type === "food") &&
+        s.item.effect?.stat === "health" &&
+        s.quantity > 0,
+    )
+    .sort((a, b) => (b.item.effect?.amount ?? 0) - (a.item.effect?.amount ?? 0));
+
+  if (healables.length === 0) return;
+
+  // Use the smallest heal that would bring us above 50%, otherwise use the biggest
+  const deficit = stats.maxHealth * 0.5 - stats.health;
+  const efficient = healables.find((s) => (s.item.effect?.amount ?? 0) >= deficit);
+  const pick = efficient ?? healables[0];
+
+  get().useItem(pick.item.id);
+}
 
 function logAction(
   get: () => GameStore,
