@@ -93,7 +93,7 @@ export interface Room {
   npcs: NPCDef[];
   items: { item: ItemDef; position: Position }[];
   exits: { direction: Direction; targetRoomId: string; position: Position }[];
-  ambiance: "dungeon" | "cave" | "forest" | "town" | "boss";
+  ambiance: "dungeon" | "cave" | "forest" | "town" | "boss" | "void";
   discovered: boolean;
 }
 

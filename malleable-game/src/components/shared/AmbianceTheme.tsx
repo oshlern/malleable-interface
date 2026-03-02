@@ -50,6 +50,14 @@ const THEMES: Record<string, ThemeColors> = {
     accentBg: "bg-red-500/10",
     textMuted: "text-white/35",
   },
+  void: {
+    panelBg: "bg-[#0a1020]/95",
+    panelBorder: "border-cyan-400/20",
+    headerBg: "border-b border-cyan-400/15",
+    accentColor: "text-cyan-300",
+    accentBg: "bg-cyan-400/10",
+    textMuted: "text-white/35",
+  },
 };
 
 export function useAmbianceTheme(): ThemeColors {

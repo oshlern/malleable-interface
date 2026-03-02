@@ -107,6 +107,8 @@ export interface PlannerInput {
   recentMoves: string[];
   turnCount: number;
   combatTarget: NPCDef | null;
+  worldIndex?: 1 | 2;
+  worldOneComplete?: boolean;
   stuckReason?: string;
   previousPlan?: SmartPlan;
 }
@@ -132,6 +134,8 @@ ${stuckSection}${prevPlanSection}
 - Level: ${state.player.stats.level}, XP: ${state.player.stats.xp}/${state.player.stats.xpToNext}
 - Gold: ${state.player.stats.gold}
 ${state.combatTarget ? `- IN COMBAT with ${state.combatTarget.name} (HP ${state.combatTarget.health}/${state.combatTarget.maxHealth})` : ""}
+- World: ${state.worldIndex ?? 1}
+- World 1 complete: ${(state.worldOneComplete ?? false) ? "yes" : "no"}
 
 **Inventory:**
 ${serializeInventory(state.player.inventory)}
@@ -171,6 +175,7 @@ Produce a plan of 4-8 concrete steps. Consider:
 - The bot navigates using greedy pathfinding. If a target seems unreachable, try going to a different room first or pursuing a different goal.
 - You can set the "room" field in a step to route to that room through intermediate rooms.
 - For any step with "room", use an exact room id from the Room Graph JSON.
+- If World 1 is not complete, do not plan World 2 objectives yet.
 
 Return valid JSON matching this schema exactly:
 {

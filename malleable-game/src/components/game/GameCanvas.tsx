@@ -39,6 +39,12 @@ const AMBIANCE_COLORS: Record<
     particle: "rgba(240,80,60,",
     particleCount: 20,
   },
+  void: {
+    bg: "#070b16",
+    fog: "rgba(8,12,24,0.6)",
+    particle: "rgba(125,211,252,",
+    particleCount: 36,
+  },
 };
 
 interface Particle {
@@ -132,6 +138,9 @@ function drawPlayerLight(
   } else if (ambiance === "forest") {
     grad.addColorStop(0, "rgba(160,220,140,0.06)");
     grad.addColorStop(0.5, "rgba(100,180,80,0.02)");
+  } else if (ambiance === "void") {
+    grad.addColorStop(0, "rgba(125,211,252,0.08)");
+    grad.addColorStop(0.5, "rgba(167,139,250,0.03)");
   } else {
     grad.addColorStop(0, "rgba(139,92,246,0.08)");
     grad.addColorStop(0.5, "rgba(100,60,200,0.03)");

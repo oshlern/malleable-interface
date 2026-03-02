@@ -22,6 +22,16 @@ const T = {
   lava: () => makeTile("lava", false, "~", "#f97316", "#3c1106"),
 };
 
+const T2 = {
+  floor: () => makeTile("floor", true, "·", "#7dd3fc", "#0a1020"),
+  wall: () => makeTile("wall", false, "▓", "#1f2a44", "#060b16"),
+  door: () => makeTile("door", true, "◍", "#a78bfa", "#0b1324"),
+  chest: () => makeTile("chest", true, "◆", "#22d3ee", "#0b1324"),
+  stairs: () => makeTile("stairs", true, "✦", "#e879f9", "#0b1324"),
+  water: () => makeTile("water", false, "≈", "#38bdf8", "#07182d"),
+  lava: () => makeTile("lava", false, "~", "#f43f5e", "#2a0610"),
+};
+
 function makeGrid(width: number, height: number, layout: string[]): Tile[][] {
   const grid: Tile[][] = [];
   for (let y = 0; y < height; y++) {
@@ -37,6 +47,28 @@ function makeGrid(width: number, height: number, layout: string[]): Tile[][] {
         case "~": row.push(T.water()); break;
         case "L": row.push(T.lava()); break;
         default:  row.push(T.floor()); break;
+      }
+    }
+    grid.push(row);
+  }
+  return grid;
+}
+
+function makeGrid2(width: number, height: number, layout: string[]): Tile[][] {
+  const grid: Tile[][] = [];
+  for (let y = 0; y < height; y++) {
+    const row: Tile[] = [];
+    for (let x = 0; x < width; x++) {
+      const ch = layout[y]?.[x] ?? "#";
+      switch (ch) {
+        case ".": row.push(T2.floor()); break;
+        case "#": row.push(T2.wall()); break;
+        case "+": row.push(T2.door()); break;
+        case "C": row.push(T2.chest()); break;
+        case ">": row.push(T2.stairs()); break;
+        case "~": row.push(T2.water()); break;
+        case "L": row.push(T2.lava()); break;
+        default:  row.push(T2.floor()); break;
       }
     }
     grid.push(row);
@@ -280,6 +312,89 @@ const BAT_2: NPCDef = {
   dialogue: ["*screech*"],
 };
 
+// ─── World 2 NPCs ───────────────────────────────
+
+const STAR_GUIDE: NPCDef = {
+  id: "npc_star_guide", name: "Lyra, Star Guide", position: { ...P0 },
+  symbol: "L", color: "#67e8f9", blocking: true, type: "friendly",
+  health: 40, maxHealth: 40, attack: 4, defense: 6,
+  dialogue: [
+    "You crossed the Veil. Few from Ashford ever do.",
+    "This realm fractures when the Conductor plays.",
+    "Gather three Resonance Shards so we can open the Heart Chamber.",
+  ],
+  questId: "quest_shards",
+};
+
+const ARCHIVIST: NPCDef = {
+  id: "npc_archivist", name: "Archivist Nox", position: { ...P0 },
+  symbol: "N", color: "#c4b5fd", blocking: true, type: "friendly",
+  health: 35, maxHealth: 35, attack: 3, defense: 5,
+  dialogue: [
+    "These halls remember every song ever silenced.",
+    "Bring me a shard and I will attune your gear.",
+    "The Conductor waits beyond the Storm Nexus.",
+  ],
+  questId: "quest_conductor",
+};
+
+const RIFT_STALKER_1: NPCDef = {
+  id: "npc_rift_stalker_1", name: "Rift Stalker", position: { ...P0 },
+  symbol: "ϟ", color: "#a78bfa", blocking: true, type: "hostile",
+  health: 24, maxHealth: 24, attack: 10, defense: 4,
+  dialogue: ["*crackling hiss*"], loot: [ITEMS.scroll_fireball],
+};
+
+const RIFT_STALKER_2: NPCDef = {
+  id: "npc_rift_stalker_2", name: "Rift Stalker", position: { ...P0 },
+  symbol: "ϟ", color: "#a78bfa", blocking: true, type: "hostile",
+  health: 24, maxHealth: 24, attack: 10, defense: 4,
+  dialogue: ["*hiss*"], loot: [ITEMS.gold_pile],
+};
+
+const NULL_SENTINEL_1: NPCDef = {
+  id: "npc_null_sentinel_1", name: "Null Sentinel", position: { ...P0 },
+  symbol: "Ω", color: "#93c5fd", blocking: true, type: "hostile",
+  health: 34, maxHealth: 34, attack: 12, defense: 7,
+  dialogue: ["UNWORTHY."], loot: [ITEMS.knight_armor],
+};
+
+const NULL_SENTINEL_2: NPCDef = {
+  id: "npc_null_sentinel_2", name: "Null Sentinel", position: { ...P0 },
+  symbol: "Ω", color: "#93c5fd", blocking: true, type: "hostile",
+  health: 34, maxHealth: 34, attack: 12, defense: 7,
+  dialogue: ["INTRUDER."], loot: [ITEMS.iron_shield],
+};
+
+const ECHO_WISP_1: NPCDef = {
+  id: "npc_echo_wisp_1", name: "Echo Wisp", position: { ...P0 },
+  symbol: "◌", color: "#22d3ee", blocking: true, type: "hostile",
+  health: 16, maxHealth: 16, attack: 8, defense: 2,
+  dialogue: ["...return the song..."], loot: [ITEMS.sapphire],
+};
+
+const ECHO_WISP_2: NPCDef = {
+  id: "npc_echo_wisp_2", name: "Echo Wisp", position: { ...P0 },
+  symbol: "◌", color: "#22d3ee", blocking: true, type: "hostile",
+  health: 16, maxHealth: 16, attack: 8, defense: 2,
+  dialogue: ["...hollow harmony..."], loot: [ITEMS.bone_charm],
+};
+
+const VEIL_HOUND: NPCDef = {
+  id: "npc_veil_hound", name: "Veil Hound", position: { ...P0 },
+  symbol: "h", color: "#fb7185", blocking: true, type: "hostile",
+  health: 28, maxHealth: 28, attack: 11, defense: 5,
+  dialogue: ["*warped growl*"], loot: [ITEMS.greater_health_potion],
+};
+
+const CONDUCTOR: NPCDef = {
+  id: "npc_conductor", name: "The Conductor", position: { ...P0 },
+  symbol: "𝄞", color: "#f472b6", blocking: true, type: "hostile",
+  health: 90, maxHealth: 90, attack: 16, defense: 9,
+  dialogue: ["THE FINAL MOVEMENT BEGINS."],
+  loot: [ITEMS.shadow_blade, ITEMS.elixir_of_vigor],
+};
+
 // ─── ROOMS ───────────────────────────────────────
 
 export function createRooms(): Record<string, Room> {
@@ -520,7 +635,7 @@ export function createRooms(): Record<string, Room> {
       "#...##......##...#",
       "#................#",
       "#................#",
-      "##################",
+      "#########+########",
     ]),
     entities: [],
     npcs: [GHOST],
@@ -531,8 +646,367 @@ export function createRooms(): Record<string, Room> {
     ],
     exits: [
       { direction: "up", targetRoomId: "ossuary", position: { x: 7, y: 0 } },
+      { direction: "down", targetRoomId: "world2_gateway", position: { x: 9, y: 13 } },
     ],
     ambiance: "forest",
+    discovered: false,
+  },
+
+  // 8+. World 2 — the Veil Expanse
+  world2_gateway: {
+    id: "world2_gateway",
+    name: "Veil Gate",
+    width: 22,
+    height: 14,
+    tiles: makeGrid2(22, 14, [
+      "##########+###########",
+      "#....................#",
+      "#....~~~~............#",
+      "#....~~~~............#",
+      "#....................#",
+      "#........###.........#",
+      "#........###.........#",
+      "#....................#",
+      "#..........C.........#",
+      "#....................#",
+      "#....###.............#",
+      "#....###.............#",
+      "#....................#",
+      "######+######+########",
+    ]),
+    entities: [],
+    npcs: [STAR_GUIDE, ECHO_WISP_1],
+    items: [
+      { item: ITEMS.greater_health_potion, position: { ...P0 } },
+      { item: ITEMS.sapphire, position: { ...P0 } },
+    ],
+    exits: [
+      { direction: "up", targetRoomId: "crypt", position: { x: 10, y: 0 } },
+      { direction: "down", targetRoomId: "world2_shard_fields", position: { x: 6, y: 13 } },
+      { direction: "down", targetRoomId: "world2_fracture_halls", position: { x: 13, y: 13 } },
+    ],
+    ambiance: "void",
+    discovered: false,
+  },
+
+  world2_shard_fields: {
+    id: "world2_shard_fields",
+    name: "Shard Fields",
+    width: 22,
+    height: 14,
+    tiles: makeGrid2(22, 14, [
+      "######+###############",
+      "#....................#",
+      "#..##......##........#",
+      "#..##......##........#",
+      "#....................#",
+      "#..............~~....#",
+      "#..............~~....#",
+      "#....................#",
+      "#....C...............#",
+      "#....................#",
+      "#........###.........#",
+      "#........###.........#",
+      "#....................#",
+      "##########+###########",
+    ]),
+    entities: [],
+    npcs: [RIFT_STALKER_1, ECHO_WISP_2],
+    items: [
+      { item: ITEMS.gold_pile, position: { ...P0 } },
+      { item: ITEMS.iron_sword, position: { ...P0 } },
+    ],
+    exits: [
+      { direction: "up", targetRoomId: "world2_gateway", position: { x: 6, y: 0 } },
+      { direction: "down", targetRoomId: "world2_mirror_lake", position: { x: 10, y: 13 } },
+    ],
+    ambiance: "void",
+    discovered: false,
+  },
+
+  world2_fracture_halls: {
+    id: "world2_fracture_halls",
+    name: "Fracture Halls",
+    width: 22,
+    height: 14,
+    tiles: makeGrid2(22, 14, [
+      "#############+#######",
+      "#....................#",
+      "#....####............#",
+      "#....####............#",
+      "#....................#",
+      "#...........####.....#",
+      "#...........####.....#",
+      "#....................#",
+      "#....~~..............#",
+      "#....~~..............#",
+      "#....................#",
+      "#..............##....#",
+      "#..............##....#",
+      "######+###############",
+    ]),
+    entities: [],
+    npcs: [NULL_SENTINEL_1, RIFT_STALKER_2],
+    items: [
+      { item: ITEMS.knight_armor, position: { ...P0 } },
+      { item: ITEMS.scroll_light, position: { ...P0 } },
+    ],
+    exits: [
+      { direction: "up", targetRoomId: "world2_gateway", position: { x: 13, y: 0 } },
+      { direction: "down", targetRoomId: "world2_obsidian_bridge", position: { x: 6, y: 13 } },
+      { direction: "down", targetRoomId: "world2_celestial_archive", position: { x: 14, y: 13 } },
+    ],
+    ambiance: "void",
+    discovered: false,
+  },
+
+  world2_mirror_lake: {
+    id: "world2_mirror_lake",
+    name: "Mirror Lake",
+    width: 22,
+    height: 14,
+    tiles: makeGrid2(22, 14, [
+      "##########+###########",
+      "#......~~~~~~........#",
+      "#......~~~~~~........#",
+      "#....................#",
+      "#....####............#",
+      "#....####............#",
+      "#....................#",
+      "#...........C........#",
+      "#....................#",
+      "#............####....#",
+      "#............####....#",
+      "#....................#",
+      "#....................#",
+      "######+###############",
+    ]),
+    entities: [],
+    npcs: [VEIL_HOUND, ECHO_WISP_1],
+    items: [
+      { item: ITEMS.sapphire, position: { ...P0 } },
+      { item: ITEMS.greater_health_potion, position: { ...P0 } },
+    ],
+    exits: [
+      { direction: "up", targetRoomId: "world2_shard_fields", position: { x: 10, y: 0 } },
+      { direction: "down", targetRoomId: "world2_frozen_spine", position: { x: 6, y: 13 } },
+      { direction: "down", targetRoomId: "world2_singing_grove", position: { x: 12, y: 13 } },
+    ],
+    ambiance: "void",
+    discovered: false,
+  },
+
+  world2_obsidian_bridge: {
+    id: "world2_obsidian_bridge",
+    name: "Obsidian Bridge",
+    width: 22,
+    height: 14,
+    tiles: makeGrid2(22, 14, [
+      "######+###############",
+      "#........LL..........#",
+      "#........LL..........#",
+      "#....................#",
+      "#....####............#",
+      "#....####............#",
+      "#....................#",
+      "#.............####...#",
+      "#.............####...#",
+      "#....................#",
+      "#....................#",
+      "#....~~..............#",
+      "#....~~..............#",
+      "##########+###########",
+    ]),
+    entities: [],
+    npcs: [NULL_SENTINEL_2, RIFT_STALKER_1],
+    items: [
+      { item: ITEMS.scroll_fireball, position: { ...P0 } },
+      { item: ITEMS.bone_charm, position: { ...P0 } },
+    ],
+    exits: [
+      { direction: "up", targetRoomId: "world2_fracture_halls", position: { x: 6, y: 0 } },
+      { direction: "down", targetRoomId: "world2_storm_nexus", position: { x: 10, y: 13 } },
+    ],
+    ambiance: "void",
+    discovered: false,
+  },
+
+  world2_celestial_archive: {
+    id: "world2_celestial_archive",
+    name: "Celestial Archive",
+    width: 22,
+    height: 14,
+    tiles: makeGrid2(22, 14, [
+      "##########+###########",
+      "#....................#",
+      "#..####........####..#",
+      "#..#..#........#..#..#",
+      "#..####........####..#",
+      "#....................#",
+      "#...........C........#",
+      "#....................#",
+      "#....##........##....#",
+      "#....##........##....#",
+      "#....................#",
+      "#....................#",
+      "#....................#",
+      "######+###############",
+    ]),
+    entities: [],
+    npcs: [ARCHIVIST, ECHO_WISP_2],
+    items: [
+      { item: ITEMS.elixir_of_vigor, position: { ...P0 } },
+      { item: ITEMS.shadow_blade, position: { ...P0 } },
+    ],
+    exits: [
+      { direction: "up", targetRoomId: "world2_fracture_halls", position: { x: 10, y: 0 } },
+      { direction: "down", targetRoomId: "world2_storm_nexus", position: { x: 6, y: 13 } },
+      { direction: "down", targetRoomId: "world2_singing_grove", position: { x: 12, y: 13 } },
+    ],
+    ambiance: "void",
+    discovered: false,
+  },
+
+  world2_frozen_spine: {
+    id: "world2_frozen_spine",
+    name: "Frozen Spine",
+    width: 22,
+    height: 14,
+    tiles: makeGrid2(22, 14, [
+      "######+###############",
+      "#.........~~.........#",
+      "#.........~~.........#",
+      "#....................#",
+      "#....####............#",
+      "#....####............#",
+      "#....................#",
+      "#..............####..#",
+      "#..............####..#",
+      "#....................#",
+      "#....C...............#",
+      "#....................#",
+      "#....................#",
+      "##########+###########",
+    ]),
+    entities: [],
+    npcs: [VEIL_HOUND, NULL_SENTINEL_1],
+    items: [
+      { item: ITEMS.greater_health_potion, position: { ...P0 } },
+      { item: ITEMS.iron_shield, position: { ...P0 } },
+    ],
+    exits: [
+      { direction: "up", targetRoomId: "world2_mirror_lake", position: { x: 6, y: 0 } },
+      { direction: "down", targetRoomId: "world2_storm_nexus", position: { x: 10, y: 13 } },
+    ],
+    ambiance: "void",
+    discovered: false,
+  },
+
+  world2_singing_grove: {
+    id: "world2_singing_grove",
+    name: "Singing Grove",
+    width: 22,
+    height: 14,
+    tiles: makeGrid2(22, 14, [
+      "######+###############",
+      "#....................#",
+      "#....####............#",
+      "#....####............#",
+      "#....................#",
+      "#...........~~.......#",
+      "#...........~~.......#",
+      "#....................#",
+      "#....C...............#",
+      "#....................#",
+      "#..........####......#",
+      "#..........####......#",
+      "#....................#",
+      "##########+###########",
+    ]),
+    entities: [],
+    npcs: [RIFT_STALKER_2, ECHO_WISP_1],
+    items: [
+      { item: ITEMS.mushroom_stew, position: { ...P0 } },
+      { item: ITEMS.silver_rapier, position: { ...P0 } },
+    ],
+    exits: [
+      { direction: "up", targetRoomId: "world2_mirror_lake", position: { x: 12, y: 0 } },
+      { direction: "up", targetRoomId: "world2_celestial_archive", position: { x: 10, y: 0 } },
+      { direction: "down", targetRoomId: "world2_heart_chamber", position: { x: 10, y: 13 } },
+    ],
+    ambiance: "void",
+    discovered: false,
+  },
+
+  world2_storm_nexus: {
+    id: "world2_storm_nexus",
+    name: "Storm Nexus",
+    width: 22,
+    height: 14,
+    tiles: makeGrid2(22, 14, [
+      "######+###############",
+      "#....~~..............#",
+      "#....~~..............#",
+      "#....................#",
+      "#...........####.....#",
+      "#...........####.....#",
+      "#....................#",
+      "#....C...............#",
+      "#....................#",
+      "#..............LL....#",
+      "#..............LL....#",
+      "#....................#",
+      "#....................#",
+      "##########+###########",
+    ]),
+    entities: [],
+    npcs: [NULL_SENTINEL_2, VEIL_HOUND],
+    items: [
+      { item: ITEMS.health_potion, position: { ...P0 } },
+      { item: ITEMS.gold_pile, position: { ...P0 } },
+    ],
+    exits: [
+      { direction: "up", targetRoomId: "world2_obsidian_bridge", position: { x: 10, y: 0 } },
+      { direction: "up", targetRoomId: "world2_celestial_archive", position: { x: 6, y: 0 } },
+      { direction: "up", targetRoomId: "world2_frozen_spine", position: { x: 14, y: 0 } },
+      { direction: "down", targetRoomId: "world2_heart_chamber", position: { x: 10, y: 13 } },
+    ],
+    ambiance: "void",
+    discovered: false,
+  },
+
+  world2_heart_chamber: {
+    id: "world2_heart_chamber",
+    name: "Heart Chamber",
+    width: 22,
+    height: 14,
+    tiles: makeGrid2(22, 14, [
+      "##########+###########",
+      "#....................#",
+      "#....####....####....#",
+      "#....#..#....#..#....#",
+      "#....####....####....#",
+      "#....................#",
+      "#...........C........#",
+      "#....................#",
+      "#....####....####....#",
+      "#....#..#....#..#....#",
+      "#....####....####....#",
+      "#....................#",
+      "#....................#",
+      "######################",
+    ]),
+    entities: [],
+    npcs: [CONDUCTOR],
+    items: [
+      { item: ITEMS.shadow_blade, position: { ...P0 } },
+      { item: ITEMS.elixir_of_vigor, position: { ...P0 } },
+    ],
+    exits: [
+      { direction: "up", targetRoomId: "world2_singing_grove", position: { x: 10, y: 0 } },
+      { direction: "up", targetRoomId: "world2_storm_nexus", position: { x: 12, y: 0 } },
+    ],
+    ambiance: "void",
     discovered: false,
   },
   };

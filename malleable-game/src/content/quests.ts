@@ -66,4 +66,30 @@ export const QUESTS: Record<string, QuestDef> = {
     reward: { xp: 80, gold: 100 },
     giverNpcId: "npc_merchant",
   },
+
+  quest_shards: {
+    id: "quest_shards",
+    name: "Resonance Fragments",
+    description:
+      "Lyra believes three Resonance Shards must be gathered from the Veil Expanse to stabilize the path to the Heart Chamber.",
+    objective: "Collect 3 Resonance Shards",
+    status: "available",
+    progress: 0,
+    target: 3,
+    reward: { xp: 220, gold: 150, item: ITEMS.elixir_of_vigor },
+    giverNpcId: "npc_star_guide",
+  },
+
+  quest_conductor: {
+    id: "quest_conductor",
+    name: "Final Movement",
+    description:
+      "Archivist Nox asks you to silence the Conductor in the Heart Chamber before the Veil collapses into Ashford.",
+    objective: "Defeat the Conductor in the Heart Chamber",
+    status: "available",
+    progress: 0,
+    target: 1,
+    reward: { xp: 500, gold: 400, item: ITEMS.shadow_blade },
+    giverNpcId: "npc_archivist",
+  },
 };

@@ -43,12 +43,13 @@ export function MiniMap() {
           {room.tiles.map((row, y) =>
             row.map((tile, x) => {
               if (!tile.discovered) return null;
-              let color = "#1a1a2e";
+              const isVoid = room.ambiance === "void";
+              let color = isVoid ? "#0b1426" : "#1a1a2e";
               if (tile.type === "wall") color = "#333355";
               else if (tile.type === "door") color = "#c89b3c";
-              else if (tile.type === "floor") color = tile.visible ? "#2a2a3e" : "#1e1e2e";
-              else if (tile.type === "water") color = "#1e3a5f";
-              else if (tile.type === "lava") color = "#5f1e0a";
+              else if (tile.type === "floor") color = tile.visible ? (isVoid ? "#1e2a44" : "#2a2a3e") : (isVoid ? "#131c33" : "#1e1e2e");
+              else if (tile.type === "water") color = isVoid ? "#165e85" : "#1e3a5f";
+              else if (tile.type === "lava") color = isVoid ? "#7f1d3f" : "#5f1e0a";
 
               return (
                 <div

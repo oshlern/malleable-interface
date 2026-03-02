@@ -573,12 +573,49 @@ const FOREST_PHRASES: Phrase[] = [
   },
 ];
 
+const VOID_PHRASES: Phrase[] = [
+  {
+    melody: [
+      { freq: N.E4, dur: 1.2, vol: 0.05 }, { freq: N.B3, dur: 0.8, vol: 0.05 },
+      { freq: N.Fs4, dur: 1.0, vol: 0.05 }, { freq: N.D4, dur: 1.5, vol: 0.05 },
+      { freq: N.B3, dur: 2.0, vol: 0.045 },
+    ],
+    chords: [
+      { freqs: [N.B2, N.Fs3, N.B3], time: 0, dur: 3.5, vol: 0.03 },
+      { freqs: [N.G3, N.D4, N.A4], time: 2.8, dur: 3.0, vol: 0.028 },
+    ],
+  },
+  {
+    melody: [
+      { freq: N.Cs4, dur: 1.0, vol: 0.05 }, { freq: N.E4, dur: 1.0, vol: 0.05 },
+      { freq: N.A4, dur: 1.4, vol: 0.05 }, { freq: N.G4, dur: 0.8, vol: 0.05 },
+      { freq: N.E4, dur: 2.2, vol: 0.045 },
+    ],
+    chords: [
+      { freqs: [N.A3, N.E4, N.Cs4], time: 0, dur: 3.0, vol: 0.03 },
+      { freqs: [N.Fs3, N.Cs4, N.E4], time: 2.5, dur: 3.5, vol: 0.028 },
+    ],
+  },
+  {
+    melody: [
+      { freq: N.B4, dur: 0.8, vol: 0.045 }, { freq: N.A4, dur: 0.8, vol: 0.045 },
+      { freq: N.Fs4, dur: 1.2, vol: 0.048 }, { freq: N.E4, dur: 1.3, vol: 0.048 },
+      { freq: N.D4, dur: 2.0, vol: 0.04 },
+    ],
+    chords: [
+      { freqs: [N.D3, N.A3, N.D4], time: 0, dur: 3.2, vol: 0.03 },
+      { freqs: [N.B2, N.Fs3, N.D4], time: 2.8, dur: 3.2, vol: 0.028 },
+    ],
+  },
+];
+
 const PHRASE_SETS: Record<string, Phrase[]> = {
   town: TOWN_PHRASES,
   dungeon: DUNGEON_PHRASES,
   cave: CAVE_PHRASES,
   boss: BOSS_PHRASES,
   forest: FOREST_PHRASES,
+  void: VOID_PHRASES,
 };
 
 let phraseCount = 0;
@@ -714,11 +751,26 @@ function playMusicPhrase(ambiance: string) {
     }
   }
 
+  if (ambiance === "void") {
+    if (Math.random() > 0.45) {
+      const pulseTime = t + 2 + Math.random() * 3;
+      playTone(220 + Math.random() * 80, 0.2, "triangle", musicGain!, pulseTime, 0.015);
+      playTone(110 + Math.random() * 60, 0.35, "sine", musicGain!, pulseTime + 0.2, 0.01);
+    }
+    if (Math.random() > 0.7) {
+      const shimmerTime = t + 1 + Math.random() * 4;
+      playTone(1600 + Math.random() * 500, 0.04, "sine", musicGain!, shimmerTime, 0.012);
+      playTone(1300 + Math.random() * 300, 0.06, "sine", musicGain!, shimmerTime + 0.1, 0.008);
+    }
+  }
+
   phraseCount++;
   let nextDelay = ambiance === "cave"
     ? 6000 + Math.random() * 3000
     : ambiance === "boss"
       ? 3500 + Math.random() * 1500
+      : ambiance === "void"
+        ? 4500 + Math.random() * 2200
       : 5000 + Math.random() * 2500;
   if (inCombat) nextDelay *= 0.6;
   musicTimeout = setTimeout(() => playMusicPhrase(currentAmbiance), nextDelay);

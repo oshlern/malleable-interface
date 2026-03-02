@@ -11,6 +11,8 @@ type SaveData = Pick<
   | "messages"
   | "turnCount"
   | "seed"
+  | "worldIndex"
+  | "worldOneComplete"
   | "autopilotStepIntervalMs"
   | "activePanels"
   | "gameOver"
@@ -27,6 +29,8 @@ export function saveGame(store: GameStore): void {
     messages: store.messages,
     turnCount: store.turnCount,
     seed: store.seed,
+    worldIndex: store.worldIndex,
+    worldOneComplete: store.worldOneComplete,
     autopilotStepIntervalMs: store.autopilotStepIntervalMs,
     activePanels: store.activePanels,
     gameOver: store.gameOver,

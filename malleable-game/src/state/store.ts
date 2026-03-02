@@ -76,6 +76,8 @@ export interface GameStore {
   menuOpen: boolean;
   gameOver: boolean;
   victory: boolean;
+  worldIndex: 1 | 2;
+  worldOneComplete: boolean;
   turnCount: number;
   combatTarget: NPCDef | null;
   tradeOpen: boolean;
@@ -277,6 +279,7 @@ function findBestRoomGoal(currentRoomId: string, state: GameStore): RoomGoal | n
     const [roomId, firstStep, distance] = queue.shift()!;
     const room = state.rooms[roomId];
     if (!room) continue;
+    if (!state.worldOneComplete && roomId.startsWith("world2_")) continue;
 
     let score = 0;
     let reason = "";
@@ -413,6 +416,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   menuOpen: false,
   gameOver: false,
   victory: false,
+  worldIndex: 1,
+  worldOneComplete: false,
   turnCount: 0,
   combatTarget: null,
   tradeOpen: false,
@@ -469,6 +474,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
     );
 
     if (exit) {
+      if (
+        exit.targetRoomId.startsWith("world2_") &&
+        !state.worldOneComplete
+      ) {
+        get().addMessage(
+          "The Veil Gate is dormant. The Pianist's Nocturne must be restored first.",
+          "narration",
+        );
+        return;
+      }
       const targetRoom = state.rooms[exit.targetRoomId];
       if (targetRoom) {
         const entryExit = targetRoom.exits.find(
@@ -497,12 +512,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
           currentRoomId: exit.targetRoomId,
           player: { ...state.player, position: entryPos, facing: dir },
           combatTarget: null,
+          worldIndex: exit.targetRoomId.startsWith("world2_") ? 2 : state.worldIndex,
           runStats: moveRunStats,
           runEvents: moveRunEvents,
         });
         sfxDoorOpen();
         changeAmbiance(targetRoom.ambiance);
         get().addMessage(`Entered ${targetRoom.name}.`, "info");
+        if (exit.targetRoomId.startsWith("world2_") && state.worldIndex === 1) {
+          get().addMessage("You step into World 2: The Veil Expanse.", "narration");
+        }
         advanceCustomQuests(get, set, `entered ${targetRoom.name}`);
 
         if (exit.targetRoomId === "chapel_ruins") {
@@ -633,6 +652,30 @@ export const useGameStore = create<GameStore>((set, get) => ({
       get().addMessage("Quest complete: Buried Fortune! Maren will be pleased.", "quest");
       questCompleted = true;
       questName = "Buried Fortune";
+    }
+    if (
+      item.id === "sapphire" &&
+      state.currentRoomId.startsWith("world2_") &&
+      quests.quest_shards?.status === "active"
+    ) {
+      quests.quest_shards.progress = Math.min(
+        quests.quest_shards.target,
+        quests.quest_shards.progress + 1,
+      );
+      get().addMessage(
+        `Resonance Shard recovered (${quests.quest_shards.progress}/${quests.quest_shards.target}).`,
+        "quest",
+      );
+      if (quests.quest_shards.progress >= quests.quest_shards.target) {
+        quests.quest_shards.status = "completed";
+        sfxQuestComplete();
+        get().addMessage(
+          "Quest complete: Resonance Fragments! Return to Lyra.",
+          "quest",
+        );
+        questCompleted = true;
+        questName = "Resonance Fragments";
+      }
     }
     if (questCompleted) {
       const s2 = get();
@@ -801,6 +844,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
           }
         }
       }
+      if (target.id === "npc_conductor") {
+        const q = quests.quest_conductor;
+        if (q && q.status === "active") {
+          q.progress = 1;
+          q.status = "completed";
+          sfxQuestComplete();
+          get().addMessage("Quest complete: Final Movement! The Veil begins to heal.", "quest");
+          atkRunStats.questsCompleted += 1;
+          atkRunEvents.push({ turn: state.turnCount, text: "Completed quest: Final Movement", type: "quest" });
+        }
+        set({
+          victory: true,
+          runEvents: [...atkRunEvents, { turn: state.turnCount, text: "The Conductor falls — World 2 cleared", type: "quest" as const }],
+        });
+      }
 
       if (ratQuestCompleted) {
         atkRunStats.questsCompleted += 1;
@@ -901,11 +959,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     if (nearbyNpc.id === "npc_ghost" && state.player.inventory.some((s) => s.item.id === "crypt_key")) {
-      get().addMessage("The piano begins to play... The dead find peace at last.", "quest");
-      set({
-        victory: true,
-        runEvents: [...get().runEvents, { turn: state.turnCount, text: "The Nocturne plays — victory", type: "quest" as const }],
-      });
+      if (!state.worldOneComplete) {
+        get().addMessage(
+          "The piano begins to play... A rift opens beneath the crypt. The Veil Gate awakens.",
+          "quest",
+        );
+        set({
+          worldOneComplete: true,
+          runEvents: [
+            ...get().runEvents,
+            { turn: state.turnCount, text: "Completed World 1: The Nocturne restored", type: "quest" as const },
+          ],
+        });
+      } else {
+        get().addMessage("The Nocturne still echoes. The Veil Gate remains open.", "narration");
+      }
       updateContext(get, set);
       return;
     }
@@ -1185,6 +1253,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       commandOpen: false,
       gameOver: false,
       victory: false,
+      worldIndex: 1,
+      worldOneComplete: false,
       turnCount: 0,
       combatTarget: null,
       tradeOpen: false,
@@ -1230,6 +1300,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       seed: data.seed,
       activePanels: data.activePanels,
       gameOver: data.gameOver,
+      worldIndex: data.worldIndex ?? (data.currentRoomId.startsWith("world2_") ? 2 : 1),
+      worldOneComplete: data.worldOneComplete ?? data.currentRoomId.startsWith("world2_"),
       autopilotStepIntervalMs:
         data.autopilotStepIntervalMs ?? DEFAULT_AUTOPILOT_STEP_INTERVAL_MS,
       combatTarget: null,
@@ -1407,6 +1479,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       recentMoves: state.recentMoves,
       turnCount: state.turnCount,
       combatTarget: state.combatTarget,
+      worldIndex: state.worldIndex,
+      worldOneComplete: state.worldOneComplete,
       stuckReason,
       previousPlan: state.smartPlan ?? undefined,
     })
