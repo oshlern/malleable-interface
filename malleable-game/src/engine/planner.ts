@@ -119,7 +119,7 @@ function buildPrompt(state: PlannerInput): string {
     : "";
 
   const prevPlanSection = state.previousPlan
-    ? `\n## Previous Plan (generated at turn ${state.previousPlan.generatedAtTurn})\nSummary: ${state.previousPlan.summary}\nSteps:\n${state.previousPlan.steps.map((s, i) => `${i + 1}. [${s.done ? "DONE" : "PENDING"}] ${s.action}${s.target ? ` → ${s.target}` : ""}${s.room ? ` (in ${s.room})` : ""}: ${s.reason}`).join("\n")}\n`
+    ? `\n## Previous Plan (generated at turn ${state.previousPlan.generatedAtTurn})\nSummary: ${state.previousPlan.summary}\nSteps:\n${state.previousPlan.steps.map((s, i) => `${i + 1}. [${s.done ? "DONE" : "PENDING"}] ${s.action}${s.target ? ` → ${s.target}` : ""}${s.room ? ` (in ${s.room})` : ""}${s.reason ? `: ${s.reason}` : ""}`).join("\n")}\n`
     : "";
 
   return `You are a strategic planner for a roguelike game. Analyze the current game state and produce a high-level plan of 4-8 steps.
@@ -179,8 +179,7 @@ Return valid JSON matching this schema exactly:
     {
       "action": "move" | "pickup" | "attack" | "talk" | "quest" | "use_item" | "explore",
       "target": "name of target entity/item/npc (optional)",
-      "room": "room id where this should happen (optional)",
-      "reason": "brief explanation"
+      "room": "room id where this should happen (optional)"
     }
   ]
 }`;
@@ -189,6 +188,32 @@ Return valid JSON matching this schema exactly:
 export async function generatePlan(state: PlannerInput): Promise<SmartPlan> {
   const openai = getClient();
   const prompt = buildPrompt(state);
+  const planSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      summary: { type: "string" },
+      steps: {
+        type: "array",
+        minItems: 4,
+        maxItems: 6,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            action: {
+              type: "string",
+              enum: ["move", "pickup", "attack", "talk", "quest", "use_item", "explore"],
+            },
+            target: { type: "string", maxLength: 40 },
+            room: { type: "string", maxLength: 32 },
+          },
+          required: ["action"],
+        },
+      },
+    },
+    required: ["summary", "steps"],
+  } as const;
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
@@ -201,8 +226,15 @@ export async function generatePlan(state: PlannerInput): Promise<SmartPlan> {
       { role: "user", content: prompt },
     ],
     temperature: 0.4,
-    max_tokens: 800,
-    response_format: { type: "json_object" },
+    max_tokens: 260,
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "smart_plan",
+        strict: true,
+        schema: planSchema,
+      },
+    },
   });
 
   const raw = response.choices[0]?.message?.content ?? "{}";
@@ -212,7 +244,7 @@ export async function generatePlan(state: PlannerInput): Promise<SmartPlan> {
       action: PlanStep["action"];
       target?: string;
       room?: string;
-      reason: string;
+      reason?: string;
     }>;
   };
 

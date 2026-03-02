@@ -72,6 +72,33 @@ export async function generateAdaptation(
 ): Promise<AdaptationResult> {
   try {
     const openai = getClient();
+    const adaptationSchema = {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        narration: { type: "string", maxLength: 120 },
+        actions: {
+          type: "array",
+          minItems: 1,
+          maxItems: 2,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              type: {
+                type: "string",
+                enum: ["spawn_item", "buff_enemy", "heal_player", "add_gold"],
+              },
+              itemId: { type: "string", maxLength: 32 },
+              amount: { type: "number" },
+            },
+            required: ["type"],
+          },
+        },
+      },
+      required: ["narration", "actions"],
+    } as const;
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -85,8 +112,15 @@ export async function generateAdaptation(
         },
       ],
       temperature: 0.8,
-      max_tokens: 200,
-      response_format: { type: "json_object" },
+      max_tokens: 140,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "difficulty_adaptation",
+          strict: true,
+          schema: adaptationSchema,
+        },
+      },
     });
 
     const raw = response.choices[0]?.message?.content ?? "{}";

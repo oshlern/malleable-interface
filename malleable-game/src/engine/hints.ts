@@ -47,13 +47,22 @@ export async function generateHint(state: {
 
   try {
     const openai = getClient();
+    const hintSchema = {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        hint: { type: "string", maxLength: 80 },
+      },
+      required: ["hint"],
+    } as const;
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "You are a concise game advisor for a dungeon crawler. Given the player's situation, respond with ONE sentence of tactical advice. Be specific — reference actual items, NPCs, or rooms by name. Max 15 words. No fluff.",
+            "You are a concise game advisor. Return JSON with one field: hint. Keep hint to max 12 words, tactical, specific, no fluff.",
         },
         {
           role: "user",
@@ -66,13 +75,20 @@ Exits: ${exits}`,
         },
       ],
       temperature: 0.6,
-      max_tokens: 40,
+      max_tokens: 24,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "tactical_hint",
+          strict: true,
+          schema: hintSchema,
+        },
+      },
     });
 
-    return (
-      response.choices[0]?.message?.content?.trim() ||
-      "Explore carefully and watch your health."
-    );
+    const raw = response.choices[0]?.message?.content ?? "{}";
+    const parsed = JSON.parse(raw) as { hint?: string };
+    return parsed.hint?.trim() || "Explore carefully and watch your health.";
   } catch {
     return "Check your inventory and plan your next move.";
   }

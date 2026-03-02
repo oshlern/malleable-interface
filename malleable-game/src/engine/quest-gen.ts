@@ -32,6 +32,34 @@ export async function generateCustomQuest(
 
   try {
     const openai = getClient();
+    const questSchema = {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        name: { type: "string", maxLength: 40 },
+        description: { type: "string", maxLength: 140 },
+        objective: { type: "string", maxLength: 80 },
+        target: { type: "integer", minimum: 1, maximum: 5 },
+        reward_xp: { type: "integer", minimum: 30, maximum: 150 },
+        reward_gold: { type: "integer", minimum: 20, maximum: 80 },
+        trackingKeywords: {
+          type: "array",
+          minItems: 1,
+          maxItems: 4,
+          items: { type: "string", maxLength: 24 },
+        },
+      },
+      required: [
+        "name",
+        "description",
+        "objective",
+        "target",
+        "reward_xp",
+        "reward_gold",
+        "trackingKeywords",
+      ],
+    } as const;
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -56,8 +84,15 @@ Player level: ${state.player.stats.level}`,
         },
       ],
       temperature: 0.7,
-      max_tokens: 250,
-      response_format: { type: "json_object" },
+      max_tokens: 180,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "custom_quest",
+          strict: true,
+          schema: questSchema,
+        },
+      },
     });
 
     const raw = response.choices[0]?.message?.content ?? "{}";
