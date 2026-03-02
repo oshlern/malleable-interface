@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useGameStore } from "../../state/store";
 
 export function KeyboardHandler() {
+  const tabAutopilotIntervalRef = useRef<number | null>(null);
   const move = useGameStore((s) => s.move);
   const interact = useGameStore((s) => s.interact);
   const attackTarget = useGameStore((s) => s.attackTarget);
@@ -18,6 +19,25 @@ export function KeyboardHandler() {
   const toggleSmartPlanner = useGameStore((s) => s.toggleSmartPlanner);
 
   useEffect(() => {
+    function stopTabAutopilotLoop() {
+      if (tabAutopilotIntervalRef.current !== null) {
+        window.clearInterval(tabAutopilotIntervalRef.current);
+        tabAutopilotIntervalRef.current = null;
+      }
+    }
+
+    function runAutopilotStep(): boolean {
+      const store = useGameStore.getState();
+      if (store.gameOver || store.victory || !store.autopilot || store.menuOpen || store.commandOpen) {
+        return false;
+      }
+
+      const action = store.getAutopilotAction();
+      if (!action) return false;
+      action();
+      return true;
+    }
+
     function handleKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
@@ -47,8 +67,14 @@ export function KeyboardHandler() {
         const store = useGameStore.getState();
         if (store.gameOver) return;
         if (store.autopilot) {
-          const action = store.getAutopilotAction();
-          if (action) action();
+          if (e.repeat) return;
+          stopTabAutopilotLoop();
+          if (!runAutopilotStep()) return;
+          tabAutopilotIntervalRef.current = window.setInterval(() => {
+            if (!runAutopilotStep()) {
+              stopTabAutopilotLoop();
+            }
+          }, useGameStore.getState().autopilotStepIntervalMs);
         } else if (!tradeOpen && !commandOpen && !menuOpen) {
           store.executePredicted();
         }
@@ -128,8 +154,25 @@ export function KeyboardHandler() {
       }
     }
 
+    function handleKeyUp(e: KeyboardEvent) {
+      if (e.key === "Tab") {
+        stopTabAutopilotLoop();
+      }
+    }
+
+    function handleBlur() {
+      stopTabAutopilotLoop();
+    }
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      stopTabAutopilotLoop();
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
   }, [
     move,
     interact,

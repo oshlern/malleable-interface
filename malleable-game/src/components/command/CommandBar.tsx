@@ -16,6 +16,7 @@ const COMMANDS = [
   { name: "look", description: "Examine your surroundings" },
   { name: "help", description: "List available commands" },
   { name: "autopilot", description: "Toggle autopilot mode" },
+  { name: "autopilot speed ", description: "Set autopilot step interval in ms" },
   { name: "seed", description: "Show or set the game seed" },
   { name: "new game", description: "Start a new game" },
   { name: "restart", description: "Restart the game" },

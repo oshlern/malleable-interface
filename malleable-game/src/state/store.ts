@@ -81,6 +81,7 @@ export interface GameStore {
   tradeOpen: boolean;
   tradeNpc: NPCDef | null;
   autopilot: boolean;
+  autopilotStepIntervalMs: number;
   seed: number;
   smartPlanner: boolean;
   smartPlan: SmartPlan | null;
@@ -111,6 +112,7 @@ export interface GameStore {
   addMessage: (text: string, type: GameMessage["type"]) => void;
   processCommand: (command: string) => void;
   toggleAutopilot: () => void;
+  setAutopilotStepIntervalMs: (ms: number) => void;
   getAutopilotAction: () => (() => void) | null;
   newGame: (seed?: number) => void;
   setMenuOpen: (open: boolean) => void;
@@ -416,6 +418,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   tradeOpen: false,
   tradeNpc: null,
   autopilot: false,
+  autopilotStepIntervalMs: DEFAULT_AUTOPILOT_STEP_INTERVAL_MS,
   seed: defaultSeed,
   smartPlanner: false,
   smartPlan: null,
@@ -1060,7 +1063,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ activePanels: s.activePanels.filter((p) => p !== panel) });
       s.addMessage(`Hid ${panel} panel.`, "system");
     } else if (cmd === "help") {
-      s.addMessage("Commands: heal, show/hide [panel], help, look, stats", "system");
+      s.addMessage(
+        "Commands: heal, show/hide [panel], help, look, stats, autopilot, autopilot speed <ms>",
+        "system",
+      );
     } else if (cmd === "look") {
       const room = s.rooms[s.currentRoomId];
       s.addMessage(`You are in ${room.name}.`, "info");
@@ -1073,6 +1079,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
     } else if (cmd === "stats") {
       if (!s.activePanels.includes("stats")) {
         set({ activePanels: [...s.activePanels, "stats"] });
+      }
+    } else if (cmd.startsWith("autopilot speed")) {
+      const speedArg = cmd.replace("autopilot speed", "").trim();
+      const speed = parseInt(speedArg, 10);
+      if (speedArg.length === 0 || isNaN(speed)) {
+        s.addMessage(
+          `Usage: autopilot speed <${MIN_AUTOPILOT_STEP_INTERVAL_MS}-${MAX_AUTOPILOT_STEP_INTERVAL_MS} ms>`,
+          "system",
+        );
+      } else {
+        const clamped = clampAutopilotStepIntervalMs(speed);
+        s.setAutopilotStepIntervalMs(speed);
+        if (clamped !== speed) {
+          s.addMessage(
+            `Autopilot speed clamped to ${clamped}ms (${MIN_AUTOPILOT_STEP_INTERVAL_MS}-${MAX_AUTOPILOT_STEP_INTERVAL_MS}ms).`,
+            "system",
+          );
+        } else {
+          s.addMessage(`Autopilot speed set to ${clamped}ms per step.`, "system");
+        }
       }
     } else if (cmd === "autopilot") {
       s.toggleAutopilot();
@@ -1123,6 +1149,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     );
   },
 
+  setAutopilotStepIntervalMs(ms: number) {
+    set({ autopilotStepIntervalMs: clampAutopilotStepIntervalMs(ms) });
+  },
+
   newGame(seed?: number) {
     const s = seed ?? generateSeed();
     msgId = 0;
@@ -1160,6 +1190,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tradeOpen: false,
       tradeNpc: null,
       autopilot: false,
+      autopilotStepIntervalMs: get().autopilotStepIntervalMs,
       seed: s,
       smartPlanner: false,
       smartPlan: null,
@@ -1199,6 +1230,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       seed: data.seed,
       activePanels: data.activePanels,
       gameOver: data.gameOver,
+      autopilotStepIntervalMs:
+        data.autopilotStepIntervalMs ?? DEFAULT_AUTOPILOT_STEP_INTERVAL_MS,
       combatTarget: null,
       contextActions: [],
       predictedAction: null,
