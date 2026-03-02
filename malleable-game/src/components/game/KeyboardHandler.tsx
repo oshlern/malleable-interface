@@ -3,20 +3,6 @@ import { useGameStore } from "../../state/store";
 
 export function KeyboardHandler() {
   const tabAutopilotIntervalRef = useRef<number | null>(null);
-  const move = useGameStore((s) => s.move);
-  const interact = useGameStore((s) => s.interact);
-  const attackTarget = useGameStore((s) => s.attackTarget);
-  const togglePanel = useGameStore((s) => s.togglePanel);
-  const setCommandOpen = useGameStore((s) => s.setCommandOpen);
-  const commandOpen = useGameStore((s) => s.commandOpen);
-  const tradeOpen = useGameStore((s) => s.tradeOpen);
-  const closeTrade = useGameStore((s) => s.closeTrade);
-  const menuOpen = useGameStore((s) => s.menuOpen);
-  const setMenuOpen = useGameStore((s) => s.setMenuOpen);
-  const combatTarget = useGameStore((s) => s.combatTarget);
-  const contextActions = useGameStore((s) => s.contextActions);
-  const toggleAutopilot = useGameStore((s) => s.toggleAutopilot);
-  const toggleSmartPlanner = useGameStore((s) => s.toggleSmartPlanner);
 
   useEffect(() => {
     function stopTabAutopilotLoop() {
@@ -48,23 +34,23 @@ export function KeyboardHandler() {
         return;
       }
 
-      if (useGameStore.getState().victory) return;
+      const store = useGameStore.getState();
+      if (store.victory) return;
 
       if (e.key === "Escape") {
         e.preventDefault();
-        if (tradeOpen) {
-          closeTrade();
-        } else if (commandOpen) {
-          setCommandOpen(false);
+        if (store.tradeOpen) {
+          store.closeTrade();
+        } else if (store.commandOpen) {
+          store.setCommandOpen(false);
         } else {
-          setMenuOpen(!menuOpen);
+          store.setMenuOpen(!store.menuOpen);
         }
         return;
       }
 
       if (e.key === "Tab") {
         e.preventDefault();
-        const store = useGameStore.getState();
         if (store.gameOver) return;
         if (store.autopilot) {
           if (e.repeat) return;
@@ -75,73 +61,73 @@ export function KeyboardHandler() {
               stopTabAutopilotLoop();
             }
           }, useGameStore.getState().autopilotStepIntervalMs);
-        } else if (!tradeOpen && !commandOpen && !menuOpen) {
+        } else if (!store.tradeOpen && !store.commandOpen && !store.menuOpen) {
           store.executePredicted();
         }
         return;
       }
 
-      if (tradeOpen || commandOpen || menuOpen) return;
+      if (store.tradeOpen || store.commandOpen || store.menuOpen) return;
 
       switch (e.key.toLowerCase()) {
         case "w":
         case "arrowup":
           e.preventDefault();
-          move("up");
+          store.move("up");
           break;
         case "s":
         case "arrowdown":
           e.preventDefault();
-          move("down");
+          store.move("down");
           break;
         case "a":
         case "arrowleft":
           e.preventDefault();
-          move("left");
+          store.move("left");
           break;
         case "d":
         case "arrowright":
           e.preventDefault();
-          move("right");
+          store.move("right");
           break;
         case "e":
           e.preventDefault();
-          if (combatTarget) {
-            attackTarget();
+          if (store.combatTarget) {
+            store.attackTarget();
           } else {
-            interact();
+            store.interact();
           }
           break;
         case "q":
           e.preventDefault();
           {
-            const qAction = contextActions.find((a) => a.key === "Q");
+            const qAction = store.contextActions.find((a) => a.key === "Q");
             if (qAction) qAction.action();
           }
           break;
         case "i":
           e.preventDefault();
-          if (!e.repeat) togglePanel("inventory");
+          if (!e.repeat) store.togglePanel("inventory");
           break;
         case "c":
           e.preventDefault();
-          if (!e.repeat) togglePanel("stats");
+          if (!e.repeat) store.togglePanel("stats");
           break;
         case "j":
           e.preventDefault();
-          if (!e.repeat) togglePanel("quests");
+          if (!e.repeat) store.togglePanel("quests");
           break;
         case "m":
           e.preventDefault();
-          if (!e.repeat) togglePanel("map");
+          if (!e.repeat) store.togglePanel("map");
           break;
         case "p":
           e.preventDefault();
-          if (!e.repeat) toggleAutopilot();
+          if (!e.repeat) store.toggleAutopilot();
           break;
         case "g":
           e.preventDefault();
-          if (!e.repeat) toggleSmartPlanner();
+          if (!e.repeat) store.toggleSmartPlanner();
           break;
         case "h":
           e.preventDefault();
@@ -149,7 +135,7 @@ export function KeyboardHandler() {
           break;
         case "/":
           e.preventDefault();
-          if (!e.repeat) setCommandOpen(true);
+          if (!e.repeat) store.setCommandOpen(true);
           break;
       }
     }
@@ -173,22 +159,7 @@ export function KeyboardHandler() {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [
-    move,
-    interact,
-    attackTarget,
-    togglePanel,
-    setCommandOpen,
-    commandOpen,
-    tradeOpen,
-    closeTrade,
-    menuOpen,
-    setMenuOpen,
-    combatTarget,
-    contextActions,
-    toggleAutopilot,
-    toggleSmartPlanner,
-  ]);
+  }, []);
 
   return null;
 }
