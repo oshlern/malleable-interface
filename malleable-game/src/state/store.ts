@@ -208,8 +208,24 @@ function isRoomCleared(roomId: string, state: GameStore): boolean {
 
 function isRoomLooping(): boolean {
   if (recentRoomPath.length < 4) return false;
+  // Detect 2-room loop: A-B-A-B
   const last4 = recentRoomPath.slice(-4);
-  return last4[0] === last4[2] && last4[1] === last4[3] && last4[0] !== last4[1];
+  if (last4[0] === last4[2] && last4[1] === last4[3] && last4[0] !== last4[1]) return true;
+  // Detect 3-room loop: A-B-C-A-B-C
+  if (recentRoomPath.length >= 6) {
+    const last6 = recentRoomPath.slice(-6);
+    if (last6[0] === last6[3] && last6[1] === last6[4] && last6[2] === last6[5]) return true;
+  }
+  // Detect revisiting same room too often in recent history
+  if (recentRoomPath.length >= 6) {
+    const recent = recentRoomPath.slice(-6);
+    const counts = new Map<string, number>();
+    for (const r of recent) counts.set(r, (counts.get(r) ?? 0) + 1);
+    for (const c of counts.values()) {
+      if (c >= 3) return true;
+    }
+  }
+  return false;
 }
 
 function resetRoomMemory() {
@@ -2061,26 +2077,26 @@ function chooseDirection(
   const recentlyEnteredRoom = lastEnteredFromRoomId && (state.turnCount - turnEnteredRoom) < ENTRY_COOLDOWN_TURNS;
   const looping = isRoomLooping();
   const roomGoal = findBestRoomGoal(state.currentRoomId, state);
+  const currentRoomDone = isRoomCleared(state.currentRoomId, state);
 
   for (const exit of room.exits) {
     if (recentlyEnteredRoom && exit.targetRoomId === lastEnteredFromRoomId) continue;
-    if (looping && recentRoomPath.slice(-3).includes(exit.targetRoomId)) continue;
+    if (looping && recentRoomPath.slice(-6).includes(exit.targetRoomId)) continue;
 
     const targetRoom = state.rooms[exit.targetRoomId];
     if (!targetRoom) continue;
 
-    // If room-level pathfinding says to go through this exit, boost its priority
     if (roomGoal && exit.targetRoomId === roomGoal.nextRoomId) {
-      const goalPriority = targetRoom.discovered ? 6 : 8;
-      targets.push({ pos: exit.position, priority: goalPriority });
+      // BFS says go here — give it high priority, especially if current room is done
+      targets.push({ pos: exit.position, priority: currentRoomDone ? 12 : 8 });
     } else if (!targetRoom.discovered) {
-      targets.push({ pos: exit.position, priority: 8 });
+      targets.push({ pos: exit.position, priority: 11 });
     } else if (!isRoomCleared(exit.targetRoomId, state)) {
       const visits = roomVisitCount.get(exit.targetRoomId) ?? 0;
-      targets.push({ pos: exit.position, priority: Math.max(1, 6 - visits) });
+      targets.push({ pos: exit.position, priority: Math.max(2, 6 - visits) });
     } else {
-      const visits = roomVisitCount.get(exit.targetRoomId) ?? 0;
-      targets.push({ pos: exit.position, priority: Math.max(1, 2 - visits) });
+      // Cleared rooms with no goal — very low priority, basically avoid
+      targets.push({ pos: exit.position, priority: 1 });
     }
   }
 
