@@ -3,6 +3,7 @@ import { useGameStore } from "../../state/store";
 import { SeedDisplay } from "../shared/SeedDisplay";
 import { X, Play, RotateCcw, Hash, Save, Download } from "lucide-react";
 import { hasSave } from "../../engine/save";
+import { parseSeed, SEED_LENGTH } from "../../engine/rng";
 
 export function PauseMenu() {
   const menuOpen = useGameStore((s) => s.menuOpen);
@@ -21,8 +22,8 @@ export function PauseMenu() {
 
   const handleSeededStart = (e: React.FormEvent) => {
     e.preventDefault();
-    const val = parseInt(seedInput, 10);
-    if (!isNaN(val)) {
+    const val = parseSeed(seedInput);
+    if (val !== null) {
       newGame(val);
       setMenuOpen(false);
       setSeedInput("");
@@ -121,16 +122,17 @@ export function PauseMenu() {
             <form onSubmit={handleSeededStart} className="animate-slide-up">
               <div className="flex gap-2">
                 <input
-                  type="number"
+                  type="text"
                   value={seedInput}
-                  onChange={(e) => setSeedInput(e.target.value)}
-                  placeholder="Enter seed..."
+                  onChange={(e) => setSeedInput(e.target.value.toUpperCase())}
+                  placeholder={`Enter ${SEED_LENGTH} letters...`}
+                  maxLength={SEED_LENGTH}
                   autoFocus
                   className="flex-1 px-3 py-2 text-sm font-mono bg-white/5 border border-white/10 rounded-lg text-white/80 placeholder:text-white/20 outline-none focus:border-frost-500/40"
                 />
                 <button
                   type="submit"
-                  disabled={!seedInput || isNaN(parseInt(seedInput, 10))}
+                  disabled={parseSeed(seedInput) === null}
                   className="px-4 py-2 text-xs font-game text-frost-400 bg-frost-500/10 border border-frost-500/30 rounded-lg hover:bg-frost-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
                   GO

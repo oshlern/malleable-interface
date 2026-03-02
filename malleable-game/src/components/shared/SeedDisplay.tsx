@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Copy, Check } from "lucide-react";
+import { formatSeed } from "../../engine/rng";
 
 interface SeedDisplayProps {
   seed: number;
@@ -8,9 +9,10 @@ interface SeedDisplayProps {
 
 export function SeedDisplay({ seed, size = "sm" }: SeedDisplayProps) {
   const [copied, setCopied] = useState(false);
+  const seedCode = formatSeed(seed);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(String(seed));
+    navigator.clipboard.writeText(seedCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -25,7 +27,7 @@ export function SeedDisplay({ seed, size = "sm" }: SeedDisplayProps) {
       className={`group inline-flex items-center gap-1.5 ${px} rounded-md bg-white/5 border border-white/10 hover:border-arcane-500/30 hover:bg-arcane-500/5 transition-all`}
     >
       <span className={`font-mono ${textSize} text-white/30 group-hover:text-white/50`}>
-        Seed: {seed}
+        Seed: {seedCode}
       </span>
       {copied ? (
         <Check size={iconSize} className="text-heal-400" />

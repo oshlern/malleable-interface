@@ -22,7 +22,7 @@ import { generatePlan } from "../engine/planner";
 import { createRooms } from "../content/rooms";
 import { QUESTS } from "../content/quests";
 import { ITEMS } from "../content/items";
-import { setSeed, getSeed } from "../engine/rng";
+import { setSeed, getSeed, formatSeed, parseSeed, generateSeed, SEED_LENGTH } from "../engine/rng";
 import {
   sfxStep,
   sfxPickup,
@@ -127,7 +127,17 @@ export interface GameStore {
 
 let msgId = 0;
 
-const defaultSeed = Math.floor(Math.random() * 2147483647);
+const defaultSeed = generateSeed();
+const DEFAULT_AUTOPILOT_STEP_INTERVAL_MS = 80;
+const MIN_AUTOPILOT_STEP_INTERVAL_MS = 30;
+const MAX_AUTOPILOT_STEP_INTERVAL_MS = 400;
+
+function clampAutopilotStepIntervalMs(value: number): number {
+  return Math.max(
+    MIN_AUTOPILOT_STEP_INTERVAL_MS,
+    Math.min(MAX_AUTOPILOT_STEP_INTERVAL_MS, value),
+  );
+}
 
 const emptyRunStats: RunStats = {
   steps: 0,
@@ -1067,16 +1077,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     } else if (cmd === "autopilot") {
       s.toggleAutopilot();
     } else if (cmd.startsWith("seed ")) {
-      const seedVal = parseInt(cmd.replace("seed ", ""), 10);
-      if (!isNaN(seedVal)) {
+      const seedCode = cmd.replace("seed ", "").trim();
+      const seedVal = parseSeed(seedCode);
+      if (seedVal !== null) {
         s.newGame(seedVal);
       } else {
-        s.addMessage("Usage: seed <number>", "system");
+        s.addMessage(`Usage: seed <${SEED_LENGTH} uppercase letters>`, "system");
       }
     } else if (cmd === "new game" || cmd === "restart") {
       s.newGame();
     } else if (cmd === "seed") {
-      s.addMessage(`Current seed: ${s.seed}`, "system");
+      s.addMessage(`Current seed: ${formatSeed(s.seed)}`, "system");
     } else if (cmd === "save") {
       s.saveGame();
     } else if (cmd === "load") {
@@ -1113,7 +1124,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   newGame(seed?: number) {
-    const s = seed ?? Math.floor(Math.random() * 2147483647);
+    const s = seed ?? generateSeed();
     msgId = 0;
     recentPositions.length = 0;
     lastEnteredFromRoomId = null;
@@ -1134,7 +1145,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       quests: cloneQuests(),
       messages: [{
         id: `msg_${++msgId}`,
-        text: `Seed: ${s}. You arrive at Ashford Village.`,
+        text: `Seed: ${formatSeed(s)}. You arrive at Ashford Village.`,
         type: "system",
         timestamp: Date.now(),
       }],
