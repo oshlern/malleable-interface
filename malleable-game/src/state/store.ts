@@ -2080,15 +2080,24 @@ function chooseDirection(
   const roomGoal = findBestRoomGoal(state.currentRoomId, state);
   const currentRoomDone = isRoomCleared(state.currentRoomId, state);
 
+  let deferredBacktrackExit: { pos: Position; priority: number } | null = null;
   for (const exit of room.exits) {
     const targetRoom = state.rooms[exit.targetRoomId];
     if (!targetRoom) continue;
 
     const isBfsGoal = roomGoal && exit.targetRoomId === roomGoal.nextRoomId;
+    const isImmediateBacktrack =
+      !!recentlyEnteredRoom && exit.targetRoomId === lastEnteredFromRoomId;
+
+    // Never immediately bounce back through the same door while cooldown is active.
+    // Keep it as a fallback only if no other targets exist.
+    if (isImmediateBacktrack) {
+      deferredBacktrackExit = { pos: exit.position, priority: 1 };
+      continue;
+    }
 
     // BFS goal exits are never blocked — they represent a planned route
     if (!isBfsGoal) {
-      if (recentlyEnteredRoom && exit.targetRoomId === lastEnteredFromRoomId) continue;
       if (looping && recentRoomPath.slice(-6).includes(exit.targetRoomId)) continue;
     }
 
@@ -2102,6 +2111,10 @@ function chooseDirection(
     } else {
       targets.push({ pos: exit.position, priority: 1 });
     }
+  }
+
+  if (targets.length === 0 && deferredBacktrackExit) {
+    targets.push(deferredBacktrackExit);
   }
 
   // Quest-related NPCs
