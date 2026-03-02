@@ -84,6 +84,21 @@ function serializeRoomGraph(rooms: Record<string, Room>, currentRoomId: string):
     .join("\n");
 }
 
+function serializeRoomGraphJson(rooms: Record<string, Room>, currentRoomId: string): string {
+  const graph = Object.values(rooms).map((r) => ({
+    id: r.id,
+    name: r.name,
+    discovered: r.discovered,
+    current: r.id === currentRoomId,
+    exits: r.exits.map((e) => ({
+      direction: e.direction,
+      to: e.targetRoomId,
+      toDiscovered: !!rooms[e.targetRoomId]?.discovered,
+    })),
+  }));
+  return JSON.stringify(graph, null, 2);
+}
+
 export interface PlannerInput {
   player: { position: Position; stats: PlayerStats; inventory: InventorySlot[] };
   currentRoomId: string;
@@ -137,6 +152,9 @@ ${room.items.length > 0 ? serializeItems(room.items) : "None"}
 **World Map:**
 ${serializeRoomGraph(state.rooms, state.currentRoomId)}
 
+**Room Graph (JSON):**
+${serializeRoomGraphJson(state.rooms, state.currentRoomId)}
+
 **Recent actions (last 15):**
 ${state.recentMoves.length > 0 ? state.recentMoves.slice(-15).join("\n") : "None yet"}
 
@@ -151,6 +169,8 @@ Produce a plan of 4-8 concrete steps. Consider:
 - Look at recent actions — if you see repetitive movement patterns (back and forth, loops), the bot is stuck. Choose a DIFFERENT target, room, or approach than what was tried before.
 - If a previous plan is shown with pending steps that aren't progressing, abandon that approach and try something else entirely.
 - The bot navigates using greedy pathfinding. If a target seems unreachable, try going to a different room first or pursuing a different goal.
+- You can set the "room" field in a step to route to that room through intermediate rooms.
+- For any step with "room", use an exact room id from the Room Graph JSON.
 
 Return valid JSON matching this schema exactly:
 {

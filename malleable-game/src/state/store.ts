@@ -331,6 +331,41 @@ function findBestRoomGoal(currentRoomId: string, state: GameStore): RoomGoal | n
   return bestGoal;
 }
 
+function findNextRoomHop(
+  fromRoomId: string,
+  toRoomId: string,
+  state: GameStore,
+): string | null {
+  if (fromRoomId === toRoomId) return null;
+  const visited = new Set<string>([fromRoomId]);
+  const queue: string[] = [fromRoomId];
+  const prev = new Map<string, string>();
+
+  while (queue.length > 0) {
+    const roomId = queue.shift()!;
+    const room = state.rooms[roomId];
+    if (!room) continue;
+
+    for (const exit of room.exits) {
+      const next = exit.targetRoomId;
+      if (visited.has(next)) continue;
+      visited.add(next);
+      prev.set(next, roomId);
+      if (next === toRoomId) {
+        // Reconstruct only the first hop after fromRoomId.
+        let cur = toRoomId;
+        while (prev.get(cur) && prev.get(cur) !== fromRoomId) {
+          cur = prev.get(cur)!;
+        }
+        return cur;
+      }
+      queue.push(next);
+    }
+  }
+
+  return null;
+}
+
 export const useGameStore = create<GameStore>((set, get) => ({
   player: {
     position: { x: 8, y: 5 },
@@ -1447,14 +1482,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       case "move":
       case "explore": {
-        if (currentStep.room && currentStep.room !== state.currentRoomId) {
-          const exit = room.exits.find((e) => e.targetRoomId === currentStep.room);
-          if (exit) {
-            if (exit.position.x === position.x && exit.position.y === position.y) {
-              markDone();
+        if (currentStep.room) {
+          if (currentStep.room === state.currentRoomId) {
+            markDone();
+            return null;
+          }
+
+          // Multi-room routing: find the next room hop on a shortest room-graph path.
+          const nextHopRoomId = findNextRoomHop(
+            state.currentRoomId,
+            currentStep.room,
+            state,
+          );
+          if (nextHopRoomId) {
+            const exit = room.exits.find((e) => e.targetRoomId === nextHopRoomId);
+            if (exit) {
+              const dir = chooseDirectionToward(state, room, position, exit.position);
+              return dir ? () => get().move(dir) : null;
             }
-            const dir = chooseDirectionToward(state, room, position, exit.position);
-            return dir ? () => get().move(dir) : null;
           }
         }
         markDone();
