@@ -307,17 +307,18 @@ function findBestRoomGoal(currentRoomId: string, state: GameStore): RoomGoal | n
       }
     }
 
-    // Penalize heavily visited rooms
+    // Penalize heavily visited rooms as destinations (not as waypoints)
     const visits = roomVisitCount.get(roomId) ?? 0;
     score -= visits * 2;
 
-    if (score > bestScore && firstStep) {
+    // Only consider rooms that actually have something worth going to
+    if (score > bestScore && score > 0 && firstStep) {
       bestScore = score;
       bestGoal = { targetRoomId: roomId, nextRoomId: firstStep, distance, reason };
     }
 
-    // Continue BFS through discovered rooms only (can't path through undiscovered)
-    if (room.discovered && distance < 6) {
+    // Always continue BFS through discovered rooms — they may be waypoints to reach undiscovered ones
+    if (room.discovered && distance < 8) {
       for (const exit of room.exits) {
         if (!visited.has(exit.targetRoomId)) {
           visited.add(exit.targetRoomId);
@@ -2080,14 +2081,18 @@ function chooseDirection(
   const currentRoomDone = isRoomCleared(state.currentRoomId, state);
 
   for (const exit of room.exits) {
-    if (recentlyEnteredRoom && exit.targetRoomId === lastEnteredFromRoomId) continue;
-    if (looping && recentRoomPath.slice(-6).includes(exit.targetRoomId)) continue;
-
     const targetRoom = state.rooms[exit.targetRoomId];
     if (!targetRoom) continue;
 
-    if (roomGoal && exit.targetRoomId === roomGoal.nextRoomId) {
-      // BFS says go here — give it high priority, especially if current room is done
+    const isBfsGoal = roomGoal && exit.targetRoomId === roomGoal.nextRoomId;
+
+    // BFS goal exits are never blocked — they represent a planned route
+    if (!isBfsGoal) {
+      if (recentlyEnteredRoom && exit.targetRoomId === lastEnteredFromRoomId) continue;
+      if (looping && recentRoomPath.slice(-6).includes(exit.targetRoomId)) continue;
+    }
+
+    if (isBfsGoal) {
       targets.push({ pos: exit.position, priority: currentRoomDone ? 12 : 8 });
     } else if (!targetRoom.discovered) {
       targets.push({ pos: exit.position, priority: 11 });
@@ -2095,7 +2100,6 @@ function chooseDirection(
       const visits = roomVisitCount.get(exit.targetRoomId) ?? 0;
       targets.push({ pos: exit.position, priority: Math.max(2, 6 - visits) });
     } else {
-      // Cleared rooms with no goal — very low priority, basically avoid
       targets.push({ pos: exit.position, priority: 1 });
     }
   }
