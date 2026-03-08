@@ -210,28 +210,30 @@ export async function generatePlan(state: PlannerInput): Promise<SmartPlan> {
               type: "string",
               enum: ["move", "pickup", "attack", "talk", "quest", "use_item", "explore"],
             },
-            target: { type: "string", maxLength: 40 },
-            room: { type: "string", maxLength: 32 },
+            target: { type: ["string", "null"], maxLength: 40 },
+            room: { type: ["string", "null"], maxLength: 32 },
           },
-          required: ["action"],
+          required: ["action", "target", "room"],
         },
       },
     },
     required: ["summary", "steps"],
   } as const;
 
+  const messages = [
+    {
+      role: "system" as const,
+      content:
+        "You are a game AI planner. Return only valid JSON, no markdown fences.",
+    },
+    { role: "user" as const, content: prompt },
+  ];
+
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are a game AI planner. Return only valid JSON, no markdown fences.",
-      },
-      { role: "user", content: prompt },
-    ],
+    messages,
     temperature: 0.4,
-    max_tokens: 260,
+    max_tokens: 420,
     response_format: {
       type: "json_schema",
       json_schema: {
@@ -241,24 +243,35 @@ export async function generatePlan(state: PlannerInput): Promise<SmartPlan> {
       },
     },
   });
-
   const raw = response.choices[0]?.message?.content ?? "{}";
+
   const parsed = JSON.parse(raw) as {
     summary?: string;
     steps?: Array<{
       action: PlanStep["action"];
-      target?: string;
-      room?: string;
+      target?: string | null;
+      room?: string | null;
       reason?: string;
     }>;
   };
 
+  const steps = (parsed.steps ?? []).slice(0, 8);
+  if (steps.length === 0) {
+    return {
+      summary: parsed.summary ?? "No plan generated",
+      steps: [
+        { action: "explore", reason: "No structured steps returned; continue exploring.", done: false },
+      ],
+      generatedAtTurn: state.turnCount,
+    };
+  }
+
   return {
     summary: parsed.summary ?? "No plan generated",
-    steps: (parsed.steps ?? []).map((s) => ({
+    steps: steps.map((s) => ({
       action: s.action,
-      target: s.target,
-      room: s.room,
+      target: s.target ?? undefined,
+      room: s.room ?? undefined,
       reason: s.reason,
       done: false,
     })),
