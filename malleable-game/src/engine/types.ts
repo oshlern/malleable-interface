@@ -136,6 +136,7 @@ export interface PlanStep {
   action: "move" | "pickup" | "attack" | "talk" | "quest" | "use_item" | "explore";
   target?: string;
   room?: string;
+  location?: Position;
   reason?: string;
   done: boolean;
 }

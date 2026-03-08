@@ -192,6 +192,14 @@ const roomLastVisitTurn = new Map<string, number>();
 const roomCleared = new Set<string>();
 const recentRoomPath: string[] = [];
 const MAX_ROOM_PATH = 8;
+const PATH_FOLLOW_TIMEOUT_TURNS = 100;
+let activePathGoalKey: string | null = null;
+let activePathGoalStartTurn = 0;
+
+function resetPathFollowTracking() {
+  activePathGoalKey = null;
+  activePathGoalStartTurn = 0;
+}
 
 function recordRoomVisit(roomId: string, turn: number) {
   roomVisitCount.set(roomId, (roomVisitCount.get(roomId) ?? 0) + 1);
@@ -247,6 +255,7 @@ function resetRoomMemory() {
   roomLastVisitTurn.clear();
   roomCleared.clear();
   recentRoomPath.length = 0;
+  resetPathFollowTracking();
 }
 
 interface RoomGoal {
@@ -958,21 +967,29 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ tradeOpen: true, tradeNpc: nearbyNpc });
     }
 
-    if (nearbyNpc.id === "npc_ghost" && state.player.inventory.some((s) => s.item.id === "crypt_key")) {
-      if (!state.worldOneComplete) {
-        get().addMessage(
-          "The piano begins to play... A rift opens beneath the crypt. The Veil Gate awakens.",
-          "quest",
-        );
-        set({
-          worldOneComplete: true,
-          runEvents: [
-            ...get().runEvents,
-            { turn: state.turnCount, text: "Completed World 1: The Nocturne restored", type: "quest" as const },
-          ],
-        });
+    if (nearbyNpc.id === "npc_ghost") {
+      const hasCryptKey = state.player.inventory.some((s) => s.item.id === "crypt_key");
+      if (hasCryptKey) {
+        if (!state.worldOneComplete) {
+          get().addMessage(
+            "The piano begins to play... A rift opens beneath the crypt. The Veil Gate awakens.",
+            "quest",
+          );
+          set({
+            worldOneComplete: true,
+            runEvents: [
+              ...get().runEvents,
+              { turn: state.turnCount, text: "Completed World 1: The Nocturne restored", type: "quest" as const },
+            ],
+          });
+        } else {
+          get().addMessage("The Nocturne still echoes. The Veil Gate remains open.", "narration");
+        }
       } else {
-        get().addMessage("The Nocturne still echoes. The Veil Gate remains open.", "narration");
+        get().addMessage(
+          "The Pianist whispers: \"The melody is incomplete... bring me the Crypt Key.\"",
+          "narration",
+        );
       }
       updateContext(get, set);
       return;
@@ -1447,6 +1464,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   toggleSmartPlanner() {
     const current = get().smartPlanner;
     set({ smartPlanner: !current });
+    if (current) resetPathFollowTracking();
     get().addMessage(
       current
         ? "Smart Planner disengaged."
@@ -1485,6 +1503,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       previousPlan: state.smartPlan ?? undefined,
     })
       .then((plan) => {
+        resetPathFollowTracking();
         set({ smartPlan: plan, plannerLoading: false });
         const s = useGameStore.getState();
         s.addMessage(`Plan: ${plan.summary}`, "system");
@@ -1503,8 +1522,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const plan = state.smartPlan;
     if (!plan || plan.steps.length === 0) return null;
 
-    const currentStep = plan.steps.find((s) => !s.done);
-    if (!currentStep) return null;
+    const stepIndex = plan.steps.findIndex((s) => !s.done);
+    if (stepIndex === -1) return null;
+    const currentStep = plan.steps[stepIndex];
 
     const room = state.rooms[state.currentRoomId];
     if (!room) return null;
@@ -1513,10 +1533,61 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const markDone = () => {
       const p = get().smartPlan;
       if (p) {
-        const updated = { ...p, steps: p.steps.map((s) => (s === currentStep ? { ...s, done: true } : s)) };
+        const updated = {
+          ...p,
+          steps: p.steps.map((s, i) => (i === stepIndex ? { ...s, done: true } : s)),
+        };
         set({ smartPlan: updated });
+        resetPathFollowTracking();
       }
     };
+
+    const targetRoomId = currentStep.room ?? state.currentRoomId;
+    const targetLocation = currentStep.location;
+    const roomReached = state.currentRoomId === targetRoomId;
+    const locationReached = !targetLocation
+      || (position.x === targetLocation.x && position.y === targetLocation.y);
+    const isNavigatingToGoal = !!(currentStep.room || currentStep.location) && !(roomReached && locationReached);
+
+    if (isNavigatingToGoal) {
+      const goalKey = `${plan.generatedAtTurn}:${stepIndex}:${targetRoomId}:${targetLocation ? `${targetLocation.x},${targetLocation.y}` : "-"}`;
+      if (activePathGoalKey !== goalKey) {
+        activePathGoalKey = goalKey;
+        activePathGoalStartTurn = state.turnCount;
+      } else if (state.turnCount - activePathGoalStartTurn >= PATH_FOLLOW_TIMEOUT_TURNS) {
+        const where = targetLocation
+          ? `(${targetLocation.x},${targetLocation.y}) in ${targetRoomId}`
+          : `room ${targetRoomId}`;
+        resetPathFollowTracking();
+        get().requestReplan(
+          `Path timeout: unable to reach ${where} after ${PATH_FOLLOW_TIMEOUT_TURNS} turns.`,
+        );
+        return null;
+      }
+
+      if (!roomReached) {
+        const nextHopRoomId = findNextRoomHop(
+          state.currentRoomId,
+          targetRoomId,
+          state,
+        );
+        if (nextHopRoomId) {
+          const exit = room.exits.find((e) => e.targetRoomId === nextHopRoomId);
+          if (exit) {
+            const dir = chooseDirectionToward(state, room, position, exit.position);
+            return dir ? () => get().move(dir) : null;
+          }
+        }
+        return null;
+      }
+
+      if (targetLocation) {
+        const dir = chooseDirectionToward(state, room, position, targetLocation);
+        return dir ? () => get().move(dir) : null;
+      }
+    } else if (activePathGoalKey) {
+      resetPathFollowTracking();
+    }
 
     switch (currentStep.action) {
       case "attack": {
@@ -1600,26 +1671,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       case "move":
       case "explore": {
-        if (currentStep.room) {
-          if (currentStep.room === state.currentRoomId) {
-            markDone();
-            return null;
-          }
-
-          // Multi-room routing: find the next room hop on a shortest room-graph path.
-          const nextHopRoomId = findNextRoomHop(
-            state.currentRoomId,
-            currentStep.room,
-            state,
-          );
-          if (nextHopRoomId) {
-            const exit = room.exits.find((e) => e.targetRoomId === nextHopRoomId);
-            if (exit) {
-              const dir = chooseDirectionToward(state, room, position, exit.position);
-              return dir ? () => get().move(dir) : null;
-            }
-          }
-        }
         markDone();
         return null;
       }

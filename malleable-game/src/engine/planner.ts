@@ -121,7 +121,7 @@ function buildPrompt(state: PlannerInput): string {
     : "";
 
   const prevPlanSection = state.previousPlan
-    ? `\n## Previous Plan (generated at turn ${state.previousPlan.generatedAtTurn})\nSummary: ${state.previousPlan.summary}\nSteps:\n${state.previousPlan.steps.map((s, i) => `${i + 1}. [${s.done ? "DONE" : "PENDING"}] ${s.action}${s.target ? ` → ${s.target}` : ""}${s.room ? ` (in ${s.room})` : ""}${s.reason ? `: ${s.reason}` : ""}`).join("\n")}\n`
+    ? `\n## Previous Plan (generated at turn ${state.previousPlan.generatedAtTurn})\nSummary: ${state.previousPlan.summary}\nSteps:\n${state.previousPlan.steps.map((s, i) => `${i + 1}. [${s.done ? "DONE" : "PENDING"}] ${s.action}${s.target ? ` → ${s.target}` : ""}${s.room ? ` (in ${s.room})` : ""}${s.location ? ` @ (${s.location.x},${s.location.y})` : ""}${s.reason ? `: ${s.reason}` : ""}`).join("\n")}\n`
     : "";
 
   return `You are a strategic planner for a roguelike game. Analyze the current game state and produce a high-level plan of 4-8 steps.
@@ -173,8 +173,10 @@ Produce a plan of 4-8 concrete steps. Consider:
 - Look at recent actions — if you see repetitive movement patterns (back and forth, loops), the bot is stuck. Choose a DIFFERENT target, room, or approach than what was tried before.
 - If a previous plan is shown with pending steps that aren't progressing, abandon that approach and try something else entirely.
 - The bot navigates using greedy pathfinding. If a target seems unreachable, try going to a different room first or pursuing a different goal.
-- You can set the "room" field in a step to route to that room through intermediate rooms.
-- For any step with "room", use an exact room id from the Room Graph JSON.
+- Include both "room" and "location" for each step.
+- "room" must be an exact room id from the Room Graph JSON.
+- "location" must be an object with integer coordinates { "x": number, "y": number } in that room's map bounds.
+- If you cannot pick a meaningful room/location for a non-movement step, set them to null (but include the fields).
 - If World 1 is not complete, do not plan World 2 objectives yet.
 
 Return valid JSON matching this schema exactly:
@@ -183,8 +185,9 @@ Return valid JSON matching this schema exactly:
   "steps": [
     {
       "action": "move" | "pickup" | "attack" | "talk" | "quest" | "use_item" | "explore",
-      "target": "name of target entity/item/npc (optional)",
-      "room": "room id where this should happen (optional)"
+      "target": "name of target entity/item/npc (or null)",
+      "room": "room id where this should happen (or null)",
+      "location": { "x": 0, "y": 0 } | null
     }
   ]
 }`;
@@ -212,8 +215,17 @@ export async function generatePlan(state: PlannerInput): Promise<SmartPlan> {
             },
             target: { type: ["string", "null"], maxLength: 40 },
             room: { type: ["string", "null"], maxLength: 32 },
+            location: {
+              type: ["object", "null"],
+              additionalProperties: false,
+              properties: {
+                x: { type: "integer", minimum: 0 },
+                y: { type: "integer", minimum: 0 },
+              },
+              required: ["x", "y"],
+            },
           },
-          required: ["action", "target", "room"],
+          required: ["action", "target", "room", "location"],
         },
       },
     },
@@ -251,6 +263,7 @@ export async function generatePlan(state: PlannerInput): Promise<SmartPlan> {
       action: PlanStep["action"];
       target?: string | null;
       room?: string | null;
+      location?: { x: number; y: number } | null;
       reason?: string;
     }>;
   };
@@ -272,6 +285,7 @@ export async function generatePlan(state: PlannerInput): Promise<SmartPlan> {
       action: s.action,
       target: s.target ?? undefined,
       room: s.room ?? undefined,
+      location: s.location ? { x: Math.round(s.location.x), y: Math.round(s.location.y) } : undefined,
       reason: s.reason,
       done: false,
     })),
